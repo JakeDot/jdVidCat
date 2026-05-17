@@ -1,4 +1,4 @@
-# jdVidCat
+# jdCatVid
 
 JakeDot Video Category Downloader
 

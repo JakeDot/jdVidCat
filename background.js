@@ -191,7 +191,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
 
       await chrome.downloads.download({
         url: blobResult.dataUrl,
-        filename: filenameFromUrl(`blob-${downloaded + 1}.mp4`, downloaded, "mp4"),
+        filename: `jdCatVid/${String(downloaded + 1).padStart(3, "0")}-blob.mp4`,
         saveAs: false,
         conflictAction: "uniquify"
       });
