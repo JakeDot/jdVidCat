@@ -1,0 +1,56 @@
+name: Build Extension
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate extension files exist
+        run: |
+          test -f manifest.json
+          test -f background.js
+          test -f content.js
+          test -f popup.html
+          test -f popup.js
+          test -f icons/jdcatvid.svg
+
+      - name: Lint manifest JSON
+        run: jq . manifest.json > /dev/null
+
+      - name: Build extension artifact
+        run: |
+          mkdir -p dist
+          zip -r dist/jdCatVid.zip manifest.json background.js content.js popup.html popup.js icons
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jdCatVid-extension
+          path: dist/jdCatVid.zip
+
+  gemini-code-assist:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.GEMINI_API_KEY != '' }}
+    continue-on-error: true
+    strategy:
+      matrix:
+        model: [gemini-2.5-pro, gemini-2.5-flash, gemini-2.0-flash]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Gemini Code Assist (${{ matrix.model }})
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ matrix.model }}
+        run: |
+          npx -y @google/gemini-cli \
+            --model "$GEMINI_MODEL" \
+            --prompt "Review this repository for build and extension issues."

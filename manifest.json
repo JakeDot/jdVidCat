@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "jdCatVid",
+  "version": "0.1.0",
+  "description": "Download videos from category/tag pages with pagination crawl and blob URL support.",
+  "permissions": ["activeTab", "downloads", "scripting", "storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "jdCatVid",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "icons": {
+    "16": "icons/jdcatvid.svg",
+    "48": "icons/jdcatvid.svg",
+    "128": "icons/jdcatvid.svg"
+  }
+}

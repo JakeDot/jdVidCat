@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>jdCatVid</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 12px; width: 280px; background: #121212; color: #fff; }
+    h1 { margin: 0 0 10px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+    img { width: 18px; height: 18px; }
+    label { display: block; font-size: 13px; margin-bottom: 4px; }
+    input { width: 100%; box-sizing: border-box; padding: 7px; border-radius: 6px; border: 1px solid #444; margin-bottom: 8px; background: #1c1c1c; color: #fff; }
+    button { width: 100%; border: none; padding: 9px; border-radius: 8px; cursor: pointer; background: linear-gradient(90deg, #ff3cac, #784ba0, #2b86c5); color: #fff; font-weight: bold; }
+    #status { margin-top: 10px; font-size: 12px; color: #ddd; min-height: 32px; }
+  </style>
+</head>
+<body>
+  <h1><img src="icons/jdcatvid.svg" alt="jdCatVid" />jdCatVid</h1>
+  <label for="maxDownloads">Max videos to download</label>
+  <input id="maxDownloads" type="number" min="1" step="1" value="100" />
+  <button id="startBtn">Download from this category/tag</button>
+  <p id="status">Ready</p>
+  <script src="popup.js"></script>
+</body>
+</html>
