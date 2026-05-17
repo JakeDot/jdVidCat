@@ -15,7 +15,7 @@ const statusBar = document.getElementById("statusBar");
 /** Format a Unix timestamp as a human-readable relative time string. */
 function relativeTime(ts) {
   const seconds = Math.floor((Date.now() - ts) / 1000);
-  if (seconds < 5) return "just now";
+  if (seconds <= 5) return "just now";
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -92,6 +92,7 @@ function renderList(entries) {
     const btn = document.createElement("button");
     btn.className = "send-btn";
     btn.textContent = "Send";
+    btn.dataset.url = url;
     btn.addEventListener("click", () => sendOne(url, btn));
 
     li.appendChild(info);
@@ -124,7 +125,7 @@ sendAllBtn.addEventListener("click", () => {
   const btns = Array.from(urlListEl.querySelectorAll(".send-btn"));
   btns.forEach((btn) => {
     if (!btn.disabled) {
-      const url = btn.closest("li").querySelector(".url-text").title;
+      const url = btn.dataset.url;
       sendOne(url, btn);
     }
   });

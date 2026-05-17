@@ -79,6 +79,9 @@ async function sendToJDownloader(manifestUrl, packageName) {
 
 /**
  * Persists a captured URL to chrome.storage.session so the popup can display it.
+ * Session storage is intentional: stream manifest URLs are ephemeral and tied to
+ * the current browsing session; there is no value in restoring potentially stale
+ * or expired URLs after the browser restarts.
  * @param {string} url
  * @param {number} tabId
  */
