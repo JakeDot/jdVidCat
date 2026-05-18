@@ -1,5 +1,6 @@
 const DEFAULT_MAX_DOWNLOADS = 100;
 const VIDEO_EXTENSIONS = ["mp4", "m4v", "webm", "mov", "mkv", "avi", "m3u8"];
+const MAX_HISTORY_ENTRIES = 100;
 
 function normalizeUrl(value) {
   if (!value) {
@@ -123,12 +124,14 @@ async function convertBlobToDataUrl(tabId, blobUrl) {
 }
 
 async function downloadUrl(url, index) {
+  const filename = filenameFromUrl(url, index);
   await chrome.downloads.download({
     url,
-    filename: filenameFromUrl(url, index),
+    filename,
     saveAs: false,
     conflictAction: "uniquify"
   });
+  await addDownloadToHistory(url, filename);
 }
 
 async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MAX_DOWNLOADS }) {
@@ -189,12 +192,14 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
         continue;
       }
 
+      const filename = `jdCatVid/${String(downloaded + 1).padStart(3, "0")}-blob.mp4`;
       await chrome.downloads.download({
         url: blobResult.dataUrl,
-        filename: `jdCatVid/${String(downloaded + 1).padStart(3, "0")}-blob.mp4`,
+        filename,
         saveAs: false,
         conflictAction: "uniquify"
       });
+      await addDownloadToHistory(blobUrl, filename);
       downloaded += 1;
     }
   }
@@ -206,11 +211,63 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
   };
 }
 
+async function getDownloadHistory() {
+  const { downloadHistory = [] } = await chrome.storage.local.get("downloadHistory");
+  return downloadHistory;
+}
+
+async function addDownloadToHistory(url, filename) {
+  const history = await getDownloadHistory();
+  // Generate a more robust unique ID
+  const randomBytes = new Uint8Array(8);
+  crypto.getRandomValues(randomBytes);
+  const randomHex = Array.from(randomBytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  
+  const entry = {
+    id: `${Date.now()}-${randomHex}`,
+    url,
+    filename,
+    timestamp: new Date().toISOString()
+  };
+  history.push(entry);
+  // Keep only last MAX_HISTORY_ENTRIES downloads
+  if (history.length > MAX_HISTORY_ENTRIES) {
+    history.shift();
+  }
+  await chrome.storage.local.set({ downloadHistory: history });
+  // Notify popup if open (popup might not be open, which is expected)
+  chrome.runtime.sendMessage({ type: "jdcatvid:history-updated", history }).catch(() => {
+    // Silently ignore errors - this is expected when popup is not open
+  });
+  return entry;
+}
+
+async function clearDownloadHistory() {
+  await chrome.storage.local.set({ downloadHistory: [] });
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.set({ maxDownloads: DEFAULT_MAX_DOWNLOADS });
+  chrome.storage.local.set({ downloadHistory: [] });
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "jdcatvid:get-history") {
+    (async () => {
+      const history = await getDownloadHistory();
+      sendResponse({ ok: true, history });
+    })();
+    return true;
+  }
+
+  if (message?.type === "jdcatvid:clear-history") {
+    (async () => {
+      await clearDownloadHistory();
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+
   if (message?.type !== "jdcatvid:start") {
     return;
   }
