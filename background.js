@@ -1,7 +1,7 @@
 const DEFAULT_MAX_DOWNLOADS = 100;
 const VIDEO_EXTENSIONS = ["mp4", "m4v", "webm", "mov", "mkv", "avi", "m3u8"];
 const MAX_HISTORY_ENTRIES = 100;
-const MAX_PREVIEW_LINKS_RATIO = 0.2; // 20% of max downloads for preview links
+const MAX_PREVIEW_LINKS_RATIO = 0.2; // 20% of max downloads for preview links to prevent excessive crawling while still discovering content
 
 // Configuration for smart link traversal
 const PREVIEW_LINK_PATTERNS = [
@@ -169,10 +169,9 @@ async function downloadUrl(url, index) {
       conflictAction: "uniquify"
     });
   } catch (error) {
-    // Log error for debugging purposes
+    // Log error for debugging - download failures are recorded in history with fallback link
     console.warn("Download attempt failed for:", url, "Error:", error);
-    // Note: If download fails, users can manually download using the "Browser Download" link
-    // from the history tab after the operation completes
+    // Users can recover using the Browser Download fallback link in the history tab
   }
   await addDownloadToHistory(url, filename);
 }
@@ -216,6 +215,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
       for (const previewUrl of extractVideoPreviewUrls(current, html, rootOrigin)) {
         if (!visitedPages.has(previewUrl) && videoPreviewLinks.size < maxPreviewLinks) {
           videoPreviewLinks.add(previewUrl);
+          visitedPages.add(previewUrl);
           queuedPages.push(previewUrl);
         }
       }
@@ -351,7 +351,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id || !tab?.url) {
-    console.error("Unable to get tab information");
+    console.error("Context menu action failed: tab information unavailable");
     return;
   }
 
