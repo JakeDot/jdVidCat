@@ -1,8 +1,6 @@
 const DEFAULT_MAX_DOWNLOADS = 100;
 const VIDEO_EXTENSIONS = ["mp4", "m4v", "webm", "mov", "mkv", "avi", "m3u8"];
 const MAX_HISTORY_ENTRIES = 100;
-const MAX_PATHNAME_LENGTH = 50;
-const MAX_URL_DISPLAY_LENGTH = 60;
 
 function normalizeUrl(value) {
   if (!value) {
@@ -229,8 +227,7 @@ async function addDownloadToHistory(url, filename) {
     id: `${Date.now()}-${randomHex}`,
     url,
     filename,
-    timestamp: new Date().toISOString(),
-    status: "completed"
+    timestamp: new Date().toISOString()
   };
   history.push(entry);
   // Keep only last MAX_HISTORY_ENTRIES downloads

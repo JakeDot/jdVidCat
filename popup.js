@@ -4,7 +4,8 @@ const startButton = document.getElementById("startBtn");
 const clearHistoryBtn = document.getElementById("clearHistoryBtn");
 const historyListNode = document.getElementById("historyList");
 
-// Tab functionality
+const MAX_PATHNAME_LENGTH = 50;
+const MAX_URL_DISPLAY_LENGTH = 60;
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabContents = document.querySelectorAll(".tab-content");
 
@@ -44,10 +45,7 @@ function buildJDownloaderLink(url) {
   return `dlapi://dl/${encodeURIComponent(url)}`;
 }
 
-const MAX_PATHNAME_LENGTH = 50;
-const MAX_URL_DISPLAY_LENGTH = 60;
-
-async function loadHistory() {
+function loadHistory() {
   chrome.runtime.sendMessage({ type: "jdcatvid:get-history" }, (response) => {
     if (chrome.runtime.lastError) {
       historyListNode.innerHTML = '<div class="empty-history">Error loading history</div>';
@@ -74,8 +72,7 @@ async function loadHistory() {
           const url = new URL(entry.url);
           const origPathLen = url.pathname.length;
           const pathPart = url.pathname.substring(0, MAX_PATHNAME_LENGTH);
-          // Truncate if original pathname was longer
-          displayUrl = origPathLen > MAX_PATHNAME_LENGTH ? `${url.hostname}${pathPart}...` : `${url.hostname}${pathPart}`;
+          displayUrl = url.hostname + pathPart + (origPathLen > MAX_PATHNAME_LENGTH ? "..." : "");
         } catch {
           // Handle invalid URLs (e.g., blob URLs, malformed URLs)
           displayUrl = entry.url.substring(0, MAX_URL_DISPLAY_LENGTH) + (entry.url.length > MAX_URL_DISPLAY_LENGTH ? "..." : "");
