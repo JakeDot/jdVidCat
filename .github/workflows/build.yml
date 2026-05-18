@@ -195,7 +195,7 @@ jobs:
           mkdir -p /tmp/firefox-src
 
           # Find the Firefox XPI artifact (in jdVidCat-firefox artifact directory)
-          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts/jdVidCat-firefox -type f \( -iname '*.xpi' -o -iname '*.zip' \) 2>/dev/null)
+          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts/jdVidCat-firefox -type f \( -name '*.xpi' -o -name '*.zip' \) 2>/dev/null)
           if [ "${#firefox_zip_candidates[@]}" -ne 1 ]; then
             echo "Expected exactly one Firefox artifact in jdVidCat-firefox directory, found ${#firefox_zip_candidates[@]}."
             find /tmp/packaged-artifacts -type f \( -name '*.zip' -o -name '*.xpi' \) -print
@@ -223,7 +223,7 @@ jobs:
         if: steps.check_firefox_secrets.outputs.publish_enabled == 'true'
         run: |
           npm install --global web-ext@10.1.0
-          # web-ext uses WEB_EXT_API_KEY and WEB_EXT_API_SECRET env vars by default
+          # Set web-ext API credentials as environment variables for this command
           WEB_EXT_API_KEY="${{ secrets.FIREFOX_JWT_ISSUER }}" \
           WEB_EXT_API_SECRET="${{ secrets.FIREFOX_JWT_SECRET }}" \
           web-ext sign \
