@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload and publish to Chrome Web Store
         if: steps.check_chrome_secrets.outputs.publish_enabled == 'true'
-        uses: mobilefirstllc/cws-publish@569e87bc9a54ad7712ba6dc154a110d88af63b85
+        uses: mobilefirstllc/cws-publish@v2.1.1
         with:
           action: publish
           extension_id: ${{ secrets.CHROME_EXTENSION_ID }}
@@ -184,8 +184,13 @@ jobs:
           FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
         run: |
           mkdir -p /tmp/firefox-src
-          cp -r . /tmp/firefox-src/
-          rm -rf /tmp/firefox-src/.git /tmp/firefox-src/.github
+          rsync -a ./ /tmp/firefox-src/ \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'dist' \
+            --exclude 'web-ext-artifacts' \
+            --exclude '*.zip' \
+            --exclude '*.xpi'
           python3 - <<'PY'
           import json, os
           path = "/tmp/firefox-src/manifest.json"
