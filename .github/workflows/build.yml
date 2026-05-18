@@ -76,6 +76,18 @@ jobs:
           echo "Package created: jdVidCat.zip"
           unzip -l jdVidCat.zip
 
+      - name: Package Firefox XPI
+        run: |
+          echo "Packaging Firefox XPI extension..."
+          zip -r jdVidCat.xpi \
+            manifest.json \
+            background.js \
+            popup.html \
+            popup.js \
+            icons/
+          echo "Package created: jdVidCat.xpi"
+          unzip -l jdVidCat.xpi
+
       - name: Upload extension artifact
         uses: actions/upload-artifact@v4
         with:
