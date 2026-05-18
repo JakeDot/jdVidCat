@@ -99,7 +99,7 @@ function loadHistory() {
         const linkEl = document.createElement("a");
         linkEl.href = jdLink;
         linkEl.className = "history-item-link";
-        linkEl.title = "Open in jDownloader (if installed, otherwise browser will download)";
+        linkEl.title = "Open in jDownloader (if not installed, use the Browser Download link below)";
         linkEl.target = "_blank";
         linkEl.textContent = "Open in jDownloader";
         
@@ -113,9 +113,9 @@ function loadHistory() {
           const browserLink = document.createElement("a");
           browserLink.href = entry.url;
           browserLink.className = "history-item-link";
-          browserLink.title = "Browser download (fallback)";
+          browserLink.title = "Browser download (fallback if jDownloader unavailable)";
           browserLink.target = "_blank";
-          browserLink.textContent = " | Browser Download";
+          browserLink.textContent = "Browser Download";
           item.appendChild(browserLink);
         }
         

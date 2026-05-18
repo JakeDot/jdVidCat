@@ -179,11 +179,10 @@ async function downloadUrl(url, index) {
       conflictAction: "uniquify"
     });
   } catch (error) {
-    // Log error but continue - download may fail due to various reasons
-    // (protocol mismatch, network issues, etc.)
+    // Log error for debugging purposes
     console.warn("Download attempt failed for:", url, "Error:", error);
-    // The browser's download API will attempt the download regardless
-    // If it truly fails, the user can use the fallback browser download from history
+    // Note: If download fails, users can manually download using the "Browser Download" link
+    // from the history tab after the operation completes
   }
   await addDownloadToHistory(url, filename);
 }
@@ -227,6 +226,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
       for (const previewUrl of extractVideoPreviewUrls(current, html, rootOrigin)) {
         if (!visitedPages.has(previewUrl) && videoPreviewLinks.size < maxPreviewLinks) {
           videoPreviewLinks.add(previewUrl);
+          visitedPages.add(previewUrl);
           queuedPages.push(previewUrl);
         }
       }
@@ -321,7 +321,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // Create context menu item
   chrome.contextMenus.create({
     id: "jdcatvid-download",
-    title: "Download videos from this category/tag (jdCatVid)",
+    title: "jdCatVid: Download videos from this page",
     contexts: ["page"]
   });
 });
