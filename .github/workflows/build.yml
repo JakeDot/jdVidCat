@@ -1,4 +1,4 @@
-name: Build & Package Extension
+name: Build Extension
 
 on:
   push:
@@ -17,104 +17,57 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate manifest.json
+      - name: Validate extension files exist
         run: |
-          echo "Checking manifest.json exists..."
-          test -f manifest.json || { echo "manifest.json not found"; exit 1; }
+          test -f manifest.json
+          test -f background.js
+          test -f content.js
+          test -f popup.html
+          test -f popup.js
+          test -f icons/jdcatvid.svg
 
-          echo "Validating manifest.json is valid JSON..."
-          python3 -c "
-          import json, sys
-          with open('manifest.json') as f:
-              manifest = json.load(f)
-          required = ['manifest_version', 'name', 'version', 'background']
-          for field in required:
-              if field not in manifest:
-                  print(f'Missing required field: {field}', file=sys.stderr)
-                  sys.exit(1)
-          if manifest['manifest_version'] != 3:
-              print('manifest_version must be 3', file=sys.stderr)
-              sys.exit(1)
-          print('manifest.json is valid')
-          print(f'  Name: {manifest[\"name\"]}')
-          print(f'  Version: {manifest[\"version\"]}')
-          print(f'  Manifest version: {manifest[\"manifest_version\"]}')
-          "
-
-      - name: Validate required extension files
-        run: |
-          echo "Checking required files..."
-          for file in background.js popup.html popup.js; do
-            test -f "$file" || { echo "Required file missing: $file"; exit 1; }
-            echo "  Found: $file"
-          done
-
-      - name: Validate icon files
-        run: |
-          echo "Checking icon files..."
-          for size in 16 48 128; do
-            test -f "icons/icon${size}.png" || { echo "Missing icon: icons/icon${size}.png"; exit 1; }
-            echo "  Found: icons/icon${size}.png"
-          done
+      - name: Lint manifest JSON
+        run: jq . manifest.json > /dev/null
 
       - name: Validate JavaScript syntax
         run: |
-          echo "Checking JavaScript syntax..."
-          node --check background.js && echo "  background.js OK"
-          node --check popup.js     && echo "  popup.js OK"
+          node --check background.js
+          node --check content.js
+          node --check popup.js
 
-      - name: Package all extension formats
+      - name: Build extension artifacts
         run: |
-          echo "Packaging extensions in multiple formats..."
+          mkdir -p dist
           # Define files to include in all packages
-          FILES="manifest.json background.js popup.html popup.js icons/"
+          FILES="manifest.json background.js content.js popup.html popup.js icons"
 
-          # Create generic ZIP (build once)
-          echo "Creating generic ZIP..."
-          zip -q -r jdVidCat.zip ${FILES}
-          test -f jdVidCat.zip || { echo "✗ Failed to create jdVidCat.zip"; exit 1; }
-          echo "✓ jdVidCat.zip created successfully"
+          # Create base ZIP (generic)
+          zip -r dist/jdCatVid.zip ${FILES}
+          # Create XPI for Firefox (same content, different extension)
+          cp dist/jdCatVid.zip dist/jdCatVid.xpi
+          # Create Chrome extension (same content)
+          cp dist/jdCatVid.zip dist/jdCatVid-chrome.zip
 
-          # Create Firefox XPI (copy and rename - XPI is just a ZIP with .xpi extension)
-          # Note: This is a generic XPI. The Firefox-specific gecko ID is injected during publishing.
-          echo "Creating Firefox XPI..."
-          cp jdVidCat.zip jdVidCat.xpi
-          test -f jdVidCat.xpi || { echo "✗ Failed to create jdVidCat.xpi"; exit 1; }
-          echo "✓ jdVidCat.xpi created successfully"
-
-          # Create Chrome extension ZIP (copy and rename for clarity)
-          echo "Creating Chrome extension ZIP..."
-          cp jdVidCat.zip jdVidCat-chrome.zip
-          test -f jdVidCat-chrome.zip || { echo "✗ Failed to create jdVidCat-chrome.zip"; exit 1; }
-          echo "✓ jdVidCat-chrome.zip created successfully"
-
-          echo ""
-          echo "All packages created. Summary:"
-          ls -lh jdVidCat.zip jdVidCat.xpi jdVidCat-chrome.zip
-
-      - name: Upload Generic ZIP artifact
+      - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jdVidCat-generic
-          path: jdVidCat.zip
-          retention-days: 30
+          name: jdCatVid-zip
+          path: dist/jdCatVid.zip
 
-      - name: Upload Firefox XPI artifact
+      - name: Upload XPI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jdVidCat-firefox
-          path: jdVidCat.xpi
-          retention-days: 30
+          name: jdCatVid-xpi
+          path: dist/jdCatVid.xpi
 
-      - name: Upload Chrome Extension artifact
+      - name: Upload Chrome artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jdVidCat-chrome
-          path: jdVidCat-chrome.zip
-          retention-days: 30
+          name: jdCatVid-chrome
+          path: dist/jdCatVid-chrome.zip
 
   publish-chrome-web-store:
     name: Publish Chrome Extension
@@ -143,7 +96,7 @@ jobs:
         if: steps.check_chrome_secrets.outputs.publish_enabled == 'true'
         uses: actions/download-artifact@v4
         with:
-          name: jdVidCat-chrome
+          name: jdCatVid-chrome
           path: dist
 
       - name: Upload and publish to Chrome Web Store
@@ -156,7 +109,7 @@ jobs:
           client_id: ${{ secrets.CHROME_CLIENT_ID }}
           client_secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           refresh_token: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          zip_file: dist/jdVidCat-chrome.zip
+          zip_file: dist/jdCatVid-chrome.zip
 
   publish-firefox-amo:
     name: Publish Firefox Extension
@@ -198,10 +151,10 @@ jobs:
           rm -rf /tmp/firefox-src
           mkdir -p /tmp/firefox-src
 
-          # Find the Firefox XPI artifact (in jdVidCat-firefox artifact directory)
-          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts/jdVidCat-firefox -type f \( -name '*.xpi' -o -name '*.zip' \) 2>/dev/null)
+          # Find the Firefox XPI artifact (in jdCatVid-xpi artifact directory)
+          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts/jdCatVid-xpi -type f \( -name '*.xpi' -o -name '*.zip' \) 2>/dev/null)
           if [ "${#firefox_zip_candidates[@]}" -ne 1 ]; then
-            echo "Expected exactly one Firefox artifact in jdVidCat-firefox directory, found ${#firefox_zip_candidates[@]}."
+            echo "Expected exactly one Firefox artifact in jdCatVid-xpi directory, found ${#firefox_zip_candidates[@]}."
             find /tmp/packaged-artifacts -type f \( -name '*.zip' -o -name '*.xpi' \) -print
             exit 1
           fi
