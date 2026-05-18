@@ -1,188 +1,228 @@
-/**
- * jdVidCat - Background Service Worker
- *
- * Sniffs network traffic for HLS (.m3u8) and DASH (.mpd) stream manifests.
- * When a manifest URL is detected, it is handed off to JDownloader 2 via its
- * local Click'N'Load API running on http://127.0.0.1:9666.
- */
+const DEFAULT_MAX_DOWNLOADS = 100;
+const VIDEO_EXTENSIONS = ["mp4", "m4v", "webm", "mov", "mkv", "avi", "m3u8"];
 
-const JDOWNLOADER_API_URL = "http://127.0.0.1:9666/flash/add";
+function normalizeUrl(value) {
+  if (!value) {
+    return null;
+  }
+  return value.replace(/\\u0026/g, "&").replace(/\\\//g, "/").trim();
+}
 
-// Patterns that identify video stream manifests
-const MANIFEST_PATTERNS = [".m3u8", ".mpd"];
-
-// In-memory deduplication: maps tabId -> Set of already-seen manifest URLs.
-// Cleared when the tab is closed or navigated away.
-const seenUrls = new Map();
-
-/**
- * Returns true if the request URL looks like an HLS or DASH manifest.
- * We deliberately exclude .ts segment URLs and only match playlist/manifest
- * files so that JDownloader receives the top-level URL it needs.
- * @param {string} url
- * @returns {boolean}
- */
-function isManifestUrl(url) {
+function toAbsolute(baseUrl, candidate) {
+  const normalizedCandidate = normalizeUrl(candidate);
+  if (!normalizedCandidate) {
+    return null;
+  }
   try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return MANIFEST_PATTERNS.some((ext) => pathname.includes(ext));
+    return new URL(normalizedCandidate, baseUrl).href;
   } catch {
-    return false;
+    return null;
   }
 }
 
-/**
- * Sends a manifest URL to JDownloader 2 via the Click'N'Load flash/add API.
- * JDownloader must be running with its built-in web server enabled (default
- * port 9666).
- * @param {string} manifestUrl - The stream manifest URL to add.
- * @param {string} packageName - Optional package name shown in JDownloader.
- */
-async function sendToJDownloader(manifestUrl, packageName) {
-  const params = new URLSearchParams();
-  params.append("urls", manifestUrl);
-  if (packageName) {
-    params.append("packagename", packageName);
+function extractVideoUrls(baseUrl, htmlText) {
+  const found = new Set();
+  const directPattern = /(?:src|href|content|data-src)=["']([^"']+)["']/gi;
+  const loosePattern = /(https?:\/\/[^\s"'<>]+|\/[^\s"'<>]+)/gi;
+
+  for (const pattern of [directPattern, loosePattern]) {
+    let match;
+    while ((match = pattern.exec(htmlText)) !== null) {
+      const absolute = toAbsolute(baseUrl, match[1]);
+      if (!absolute) {
+        continue;
+      }
+
+      const lower = absolute.toLowerCase();
+      if (VIDEO_EXTENSIONS.some((ext) => lower.includes(`.${ext}`)) || lower.includes("mime=video") || lower.includes("/video/")) {
+        found.add(absolute);
+      }
+    }
   }
 
+  return [...found];
+}
+
+function extractPaginationUrls(baseUrl, htmlText, rootOrigin) {
+  const links = new Set();
+  const hrefPattern = /<a[^>]+href=["']([^"']+)["'][^>]*>/gi;
+
+  let match;
+  while ((match = hrefPattern.exec(htmlText)) !== null) {
+    const absolute = toAbsolute(baseUrl, match[1]);
+    if (!absolute) {
+      continue;
+    }
+
+    try {
+      const parsed = new URL(absolute);
+      const looksLikePagination =
+        /([?&]page=\d+)/i.test(parsed.search) ||
+        /\/page\/\d+/i.test(parsed.pathname) ||
+        /\bnext\b/i.test(absolute);
+
+      if (parsed.origin === rootOrigin && looksLikePagination) {
+        links.add(parsed.href);
+      }
+    } catch {
+      // ignore invalid pagination links
+    }
+  }
+
+  return [...links];
+}
+
+function filenameFromUrl(url, index, extensionFallback = "mp4") {
   try {
-    const response = await fetch(JDOWNLOADER_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params.toString(),
+    const parsed = new URL(url);
+    const pathName = parsed.pathname.split("/").filter(Boolean).pop() || `video-${index + 1}.${extensionFallback}`;
+    const cleaned = pathName.replace(/[^a-zA-Z0-9._-]/g, "-");
+    return `jdCatVid/${String(index + 1).padStart(3, "0")}-${cleaned}`;
+  } catch {
+    return `jdCatVid/${String(index + 1).padStart(3, "0")}-video.${extensionFallback}`;
+  }
+}
+
+async function collectBlobUrlsFromTab(tabId) {
+  try {
+    const [injection] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const value = window.__jdCatVidBlobUrls;
+        return Array.isArray(value) ? value : [];
+      }
     });
-
-    if (response.ok) {
-      console.log(`[jdVidCat] Sent to JDownloader: ${manifestUrl}`);
-      showNotification(
-        "Stream sent to JDownloader",
-        `Added: ${manifestUrl}`
-      );
-    } else {
-      console.warn(
-        `[jdVidCat] JDownloader responded with ${response.status} for: ${manifestUrl}`
-      );
-    }
-  } catch (err) {
-    // JDownloader may not be running – log and notify without crashing.
-    console.warn(
-      `[jdVidCat] Could not reach JDownloader (is it running?): ${err.message}`
-    );
-    showNotification(
-      "jdVidCat: JDownloader not reachable",
-      "Make sure JDownloader 2 is running with Remote API enabled."
-    );
+    return injection?.result || [];
+  } catch {
+    return [];
   }
 }
 
-/**
- * Persists a captured URL to chrome.storage.session so the popup can display it.
- * Session storage is intentional: stream manifest URLs are ephemeral and tied to
- * the current browsing session; there is no value in restoring potentially stale
- * or expired URLs after the browser restarts.
- * @param {string} url
- * @param {number} tabId
- */
-async function persistCapturedUrl(url, tabId) {
-  const data = await chrome.storage.session.get({ capturedUrls: [] });
-  const list = data.capturedUrls;
-
-  // Avoid duplicates across the full persisted list
-  if (!list.some((entry) => entry.url === url)) {
-    list.unshift({ url, tabId, ts: Date.now() });
-    // Keep at most 50 entries
-    if (list.length > 50) {
-      list.splice(50);
+async function convertBlobToDataUrl(tabId, blobUrl) {
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId },
+    args: [blobUrl],
+    func: async (url) => {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Failed to read blob"));
+          reader.readAsDataURL(blob);
+        });
+        return { ok: true, dataUrl, mime: blob.type || "video/mp4" };
+      } catch (error) {
+        return { ok: false, error: String(error) };
+      }
     }
-    await chrome.storage.session.set({ capturedUrls: list });
-  }
+  });
+
+  return result?.result || { ok: false, error: "Blob conversion script did not return data" };
 }
 
-/**
- * Shows a browser notification (requires "notifications" permission).
- * @param {string} title
- * @param {string} message
- */
-function showNotification(title, message) {
-  chrome.notifications.create({
-    type: "basic",
-    iconUrl: "icons/icon48.png",
-    title,
-    message,
+async function downloadUrl(url, index) {
+  await chrome.downloads.download({
+    url,
+    filename: filenameFromUrl(url, index),
+    saveAs: false,
+    conflictAction: "uniquify"
   });
 }
 
-// ---------------------------------------------------------------------------
-// webRequest listener – fires before each network request is sent
-// ---------------------------------------------------------------------------
-chrome.webRequest.onBeforeRequest.addListener(
-  (details) => {
-    const { url, tabId } = details;
+async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MAX_DOWNLOADS }) {
+  const max = Number.isFinite(maxDownloads) ? Math.max(1, Math.floor(maxDownloads)) : DEFAULT_MAX_DOWNLOADS;
 
-    if (!isManifestUrl(url)) {
-      return;
+  const visitedPages = new Set();
+  const queuedPages = [startUrl];
+  const videos = new Set();
+
+  const rootOrigin = new URL(startUrl).origin;
+
+  while (queuedPages.length > 0 && videos.size < max) {
+    const current = queuedPages.shift();
+    if (!current || visitedPages.has(current)) {
+      continue;
     }
 
-    // Per-tab deduplication
-    if (!seenUrls.has(tabId)) {
-      seenUrls.set(tabId, new Set());
+    visitedPages.add(current);
+
+    try {
+      const response = await fetch(current, { credentials: "include" });
+      if (!response.ok) {
+        continue;
+      }
+
+      const html = await response.text();
+      for (const videoUrl of extractVideoUrls(current, html)) {
+        if (videos.size >= max) {
+          break;
+        }
+        videos.add(videoUrl);
+      }
+
+      for (const pageUrl of extractPaginationUrls(current, html, rootOrigin)) {
+        if (!visitedPages.has(pageUrl)) {
+          queuedPages.push(pageUrl);
+        }
+      }
+    } catch {
+      // ignore fetch failures for individual pages and continue crawl
     }
-    const tabSeen = seenUrls.get(tabId);
-    if (tabSeen.has(url)) {
-      return;
+  }
+
+  const normalVideoUrls = [...videos].slice(0, max);
+  let downloaded = 0;
+
+  for (const url of normalVideoUrls) {
+    await downloadUrl(url, downloaded);
+    downloaded += 1;
+  }
+
+  const remainingSlots = max - downloaded;
+  if (remainingSlots > 0 && Number.isInteger(tabId)) {
+    const blobUrls = await collectBlobUrlsFromTab(tabId);
+    for (const blobUrl of blobUrls.slice(0, remainingSlots)) {
+      const blobResult = await convertBlobToDataUrl(tabId, blobUrl);
+      if (!blobResult.ok) {
+        continue;
+      }
+
+      await chrome.downloads.download({
+        url: blobResult.dataUrl,
+        filename: `jdCatVid/${String(downloaded + 1).padStart(3, "0")}-blob.mp4`,
+        saveAs: false,
+        conflictAction: "uniquify"
+      });
+      downloaded += 1;
     }
-    tabSeen.add(url);
+  }
 
-    console.log(`[jdVidCat] Detected manifest: ${url} (tab ${tabId})`);
+  return {
+    downloaded,
+    crawledPages: visitedPages.size,
+    discoveredVideos: videos.size
+  };
+}
 
-    // Persist for popup display
-    persistCapturedUrl(url, tabId);
-
-    // Hand off to JDownloader
-    sendToJDownloader(url);
-  },
-  { urls: ["<all_urls>"] }
-);
-
-// ---------------------------------------------------------------------------
-// Clean up per-tab state when a tab is closed
-// ---------------------------------------------------------------------------
-chrome.tabs.onRemoved.addListener((tabId) => {
-  seenUrls.delete(tabId);
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.sync.set({ maxDownloads: DEFAULT_MAX_DOWNLOADS });
 });
 
-// ---------------------------------------------------------------------------
-// Clean up per-tab state on navigation (new page load in same tab)
-// ---------------------------------------------------------------------------
-chrome.webNavigation.onCommitted.addListener((details) => {
-  if (details.frameId === 0) {
-    seenUrls.delete(details.tabId);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Message handler for the popup
-// ---------------------------------------------------------------------------
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-  if (request.action === "getCapturedUrls") {
-    chrome.storage.session
-      .get({ capturedUrls: [] })
-      .then((data) => sendResponse({ urls: data.capturedUrls }));
-    return true; // async response
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== "jdcatvid:start") {
+    return;
   }
 
-  if (request.action === "clearCapturedUrls") {
-    chrome.storage.session.set({ capturedUrls: [] }).then(() => {
-      seenUrls.clear();
-      sendResponse({ ok: true });
-    });
-    return true;
-  }
+  (async () => {
+    try {
+      const result = await startDownloadFromTab(message.payload);
+      sendResponse({ ok: true, result });
+    } catch (error) {
+      sendResponse({ ok: false, error: String(error) });
+    }
+  })();
 
-  if (request.action === "sendToJDownloader") {
-    sendToJDownloader(request.url).then(() => sendResponse({ ok: true }));
-    return true;
-  }
+  return true;
 });

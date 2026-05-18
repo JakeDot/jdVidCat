@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Rainbow download arrow angled down-right">
+  <defs>
+    <linearGradient id="rainbow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff0033"/>
+      <stop offset="20%" stop-color="#ff8c00"/>
+      <stop offset="40%" stop-color="#ffe600"/>
+      <stop offset="60%" stop-color="#00c853"/>
+      <stop offset="80%" stop-color="#2196f3"/>
+      <stop offset="100%" stop-color="#9c27b0"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="20" fill="#0f1016"/>
+  <path d="M36 28v38H22l42 42 42-42H92V28H36z" fill="url(#rainbow)" transform="rotate(-18 64 64)"/>
+</svg>

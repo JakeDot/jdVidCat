@@ -92,12 +92,12 @@ jobs:
           # Check if the last commit was made by github-actions[bot] to prevent infinite loops
           LAST_COMMIT_EMAIL=$(git log -1 --pretty=format:'%ae')
           LAST_COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')
-          
+
           if [ "$LAST_COMMIT_EMAIL" = "github-actions[bot]@users.noreply.github.com" ]; then
             echo "Last commit was made by github-actions[bot], skipping version bump"
             exit 0
           fi
-          
+
           # Check if commit message contains [skip-version-bump] marker
           if [[ "$LAST_COMMIT_MESSAGE" == *"[skip-version-bump]"* ]]; then
             echo "Commit message contains [skip-version-bump], skipping version bump"
@@ -119,7 +119,7 @@ jobs:
 
           # Parse version components
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-          
+
           # Validate that all components were parsed correctly
           if [ -z "$MAJOR" ] || [ -z "$MINOR" ] || [ -z "$PATCH" ]; then
             echo "Error: Failed to parse version components"
@@ -169,7 +169,7 @@ jobs:
           # Push changes and tag with retry logic
           MAX_RETRIES=3
           RETRY_COUNT=0
-          
+
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             # Pull latest changes and rebase to handle concurrent pushes
             git pull --rebase origin main || {
@@ -183,7 +183,7 @@ jobs:
                 exit 1
               fi
             }
-            
+
             # Push branch and tag
             git push origin main || {
               echo "Warning: Failed to push main branch (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
@@ -196,7 +196,7 @@ jobs:
                 exit 1
               fi
             }
-            
+
             git push origin "v$NEW_VERSION" || {
               echo "Warning: Failed to push tag (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
               RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -208,7 +208,7 @@ jobs:
                 exit 1
               fi
             }
-            
+
             # Success
             echo "Successfully pushed version bump and tag"
             break
@@ -334,3 +334,23 @@ jobs:
             --channel listed \
             --no-input
 
+  gemini-code-assist:
+    runs-on: ubuntu-latest
+    needs: validate-and-package
+    if: ${{ secrets.GEMINI_API_KEY != '' }}
+    continue-on-error: true
+    strategy:
+      matrix:
+        model: [gemini-2.5-pro, gemini-2.5-flash, gemini-2.0-flash]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Gemini Code Assist (${{ matrix.model }})
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ matrix.model }}
+        run: |
+          npx -y @google/gemini-cli \
+            --model "$GEMINI_MODEL" \
+            --prompt "Review this repository for build and extension issues."
