@@ -4,13 +4,18 @@ on:
   push:
     branches: ["**"]
   pull_request:
+    branches: ["**"]
+  release:
+    types: [published]
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  validate-and-package:
+    name: Validate and Package Extension (ZIP/XPI/Chrome)
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,7 +27,9 @@ jobs:
           test -f content.js
           test -f popup.html
           test -f popup.js
-          test -f icons/jdcatvid.svg
+          test -f icons/icon16.png
+          test -f icons/icon48.png
+          test -f icons/icon128.png
 
       - name: Lint manifest JSON
         run: jq . manifest.json > /dev/null
@@ -36,8 +43,11 @@ jobs:
       - name: Build extension artifacts
         run: |
           mkdir -p dist
+          # Define files to include in all packages
+          FILES=(manifest.json background.js content.js popup.html popup.js icons)
+
           # Create base ZIP (generic)
-          zip -r dist/jdCatVid.zip manifest.json background.js content.js popup.html popup.js icons
+          zip -r dist/jdCatVid.zip "${FILES[@]}"
           # Create XPI for Firefox (same content, different extension)
           cp dist/jdCatVid.zip dist/jdCatVid.xpi
           # Create Chrome extension (same content)
@@ -61,8 +71,272 @@ jobs:
           name: jdCatVid-chrome
           path: dist/jdCatVid-chrome.zip
 
+  bump-version-and-tag:
+    name: Bump Version and Create Tag
+    runs-on: ubuntu-latest
+    needs: validate-and-package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    concurrency:
+      group: version-bump-main
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump version and create tag
+        run: |
+          # Check if the last commit was made by github-actions[bot] to prevent infinite loops
+          LAST_COMMIT_EMAIL=$(git log -1 --pretty=format:'%ae')
+          LAST_COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')
+
+          if [ "$LAST_COMMIT_EMAIL" = "github-actions[bot]@users.noreply.github.com" ]; then
+            echo "Last commit was made by github-actions[bot], skipping version bump"
+            exit 0
+          fi
+
+          # Check if commit message contains [skip-version-bump] marker
+          if [[ "$LAST_COMMIT_MESSAGE" == *"[skip-version-bump]"* ]]; then
+            echo "Commit message contains [skip-version-bump], skipping version bump"
+            exit 0
+          fi
+
+          # Get current version from manifest.json
+          CURRENT_VERSION=$(jq -r '.version' manifest.json) || {
+            echo "Error: Failed to read version from manifest.json"
+            exit 1
+          }
+          echo "Current version: $CURRENT_VERSION"
+
+          # Validate version format (must be MAJOR.MINOR.PATCH)
+          if ! [[ $CURRENT_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Version '$CURRENT_VERSION' is not in MAJOR.MINOR.PATCH format"
+            exit 1
+          fi
+
+          # Parse version components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+          # Validate that all components were parsed correctly
+          if [ -z "$MAJOR" ] || [ -z "$MINOR" ] || [ -z "$PATCH" ]; then
+            echo "Error: Failed to parse version components"
+            exit 1
+          fi
+
+          # Bump patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          echo "New version: $NEW_VERSION"
+
+          # Check if tag already exists (prevents race condition failures)
+          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Tag v$NEW_VERSION already exists, skipping version bump"
+            exit 0
+          fi
+
+          # Update manifest.json with new version using mktemp for safety
+          TEMP_FILE=$(mktemp) || {
+            echo "Error: Failed to create temporary file"
+            exit 1
+          }
+          trap 'rm -f "$TEMP_FILE"' EXIT
+
+          jq ".version = \"$NEW_VERSION\"" manifest.json > "$TEMP_FILE" || {
+            echo "Error: Failed to update manifest.json"
+            exit 1
+          }
+          mv "$TEMP_FILE" manifest.json || {
+            echo "Error: Failed to replace manifest.json"
+            exit 1
+          }
+
+          # Commit and tag
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "Bump version to $NEW_VERSION" || {
+            echo "Error: Failed to commit version bump"
+            exit 1
+          }
+          git tag -a "v$NEW_VERSION" -m "Release version $NEW_VERSION" || {
+            echo "Error: Failed to create tag"
+            exit 1
+          }
+
+          # Push changes and tag with retry logic
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            # Pull latest changes and rebase to handle concurrent pushes
+            git pull --rebase origin main || {
+              echo "Warning: Failed to rebase on latest main (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                sleep 2
+                continue
+              else
+                echo "Error: Failed to rebase after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            }
+
+            # Push branch and tag
+            git push origin main || {
+              echo "Warning: Failed to push main branch (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                sleep 2
+                continue
+              else
+                echo "Error: Failed to push main branch after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            }
+
+            git push origin "v$NEW_VERSION" || {
+              echo "Warning: Failed to push tag (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                sleep 2
+                continue
+              else
+                echo "Error: Failed to push tag after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            }
+
+            # Success
+            echo "Successfully pushed version bump and tag"
+            break
+          done
+
+  publish-chrome-web-store:
+    name: Publish Chrome Extension
+    runs-on: ubuntu-latest
+    # Depends on validate-and-package which runs on all events (push/PR/release)
+    # This ensures artifacts are always available when this job runs on release events
+    needs: validate-and-package
+    if: github.event_name == 'release'
+    steps:
+      - name: Check Chrome publishing secrets
+        id: check_chrome_secrets
+        env:
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+        run: |
+          if [ -n "${CHROME_CLIENT_ID}" ] && [ -n "${CHROME_CLIENT_SECRET}" ] && [ -n "${CHROME_REFRESH_TOKEN}" ] && [ -n "${CHROME_EXTENSION_ID}" ]; then
+            echo "publish_enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "publish_enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::Chrome Web Store publishing skipped: one or more required secrets (CHROME_CLIENT_ID, CHROME_CLIENT_SECRET, CHROME_REFRESH_TOKEN, CHROME_EXTENSION_ID) are missing or empty."
+          fi
+
+      - name: Download Chrome extension artifact
+        if: steps.check_chrome_secrets.outputs.publish_enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: jdCatVid-chrome
+          path: dist
+
+      - name: Upload and publish to Chrome Web Store
+        if: steps.check_chrome_secrets.outputs.publish_enabled == 'true'
+        # Pin to commit SHA for security (v2.0.5)
+        uses: mobilefirstllc/cws-publish@058ab4c4b3c67541706a3f9fc974810427dce113
+        with:
+          action: publish
+          extension_id: ${{ secrets.CHROME_EXTENSION_ID }}
+          client_id: ${{ secrets.CHROME_CLIENT_ID }}
+          client_secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+          refresh_token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          zip_file: dist/jdCatVid-chrome.zip
+
+  publish-firefox-amo:
+    name: Publish Firefox Extension
+    runs-on: ubuntu-latest
+    # Depends on validate-and-package which runs on all events (push/PR/release)
+    # This ensures artifacts are always available when this job runs on release events
+    needs: validate-and-package
+    if: github.event_name == 'release'
+    steps:
+      - name: Check Firefox publishing secrets
+        id: check_firefox_secrets
+        env:
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+        run: |
+          if [ -n "${FIREFOX_JWT_ISSUER}" ] && [ -n "${FIREFOX_JWT_SECRET}" ] && [ -n "${FIREFOX_EXTENSION_ID}" ]; then
+            echo "publish_enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "publish_enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::Firefox AMO publishing skipped: one or more required secrets (FIREFOX_JWT_ISSUER, FIREFOX_JWT_SECRET, FIREFOX_EXTENSION_ID) are missing or empty."
+          fi
+
+      - name: Checkout repository
+        if: steps.check_firefox_secrets.outputs.publish_enabled == 'true'
+        uses: actions/checkout@v4
+
+      - name: Download packaged artifacts
+        if: steps.check_firefox_secrets.outputs.publish_enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/packaged-artifacts
+
+      - name: Build Firefox source directory with gecko id
+        if: steps.check_firefox_secrets.outputs.publish_enabled == 'true'
+        env:
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+        run: |
+          rm -rf /tmp/firefox-src
+          mkdir -p /tmp/firefox-src
+
+          # Find the Firefox XPI artifact (in jdCatVid-xpi artifact directory)
+          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts/jdCatVid-xpi -type f \( -name '*.xpi' -o -name '*.zip' \) 2>/dev/null)
+          if [ "${#firefox_zip_candidates[@]}" -ne 1 ]; then
+            echo "Expected exactly one Firefox artifact in jdCatVid-xpi directory, found ${#firefox_zip_candidates[@]}."
+            find /tmp/packaged-artifacts -type f \( -name '*.zip' -o -name '*.xpi' \) -print
+            exit 1
+          fi
+
+          unzip -q "${firefox_zip_candidates[0]}" -d /tmp/firefox-src
+
+          # Inject Firefox-specific gecko ID into manifest
+          python3 - <<'PY'
+          import json, os
+          path = "/tmp/firefox-src/manifest.json"
+          with open(path, "r", encoding="utf-8") as f:
+              manifest = json.load(f)
+          manifest.setdefault("browser_specific_settings", {}).setdefault("gecko", {})["id"] = os.environ["FIREFOX_EXTENSION_ID"]
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(manifest, f, ensure_ascii=False, indent=2)
+              f.write("\n")
+          PY
+
+      # NOTE: This step requires the extension to already be listed on AMO.
+      # The first listing must be done manually via the AMO developer hub.
+      # Subsequent releases can be automated with this workflow.
+      - name: Submit signed build to Firefox Add-ons (AMO)
+        if: steps.check_firefox_secrets.outputs.publish_enabled == 'true'
+        run: |
+          npm install --global web-ext@10.1.0
+          # Set web-ext API credentials as environment variables for this command
+          WEB_EXT_API_KEY="${{ secrets.FIREFOX_JWT_ISSUER }}" \
+          WEB_EXT_API_SECRET="${{ secrets.FIREFOX_JWT_SECRET }}" \
+          web-ext sign \
+            --source-dir /tmp/firefox-src \
+            --artifacts-dir /tmp/firefox-artifacts \
+            --channel listed \
+            --no-input
+
   gemini-code-assist:
     runs-on: ubuntu-latest
+    needs: validate-and-package
     if: ${{ secrets.GEMINI_API_KEY != '' }}
     continue-on-error: true
     strategy:
