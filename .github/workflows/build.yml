@@ -119,6 +119,8 @@ jobs:
   publish-chrome-web-store:
     name: Publish Chrome Extension
     runs-on: ubuntu-latest
+    # Depends on validate-and-package which runs on all events (push/PR/release)
+    # This ensures artifacts are always available when this job runs on release events
     needs: validate-and-package
     if: github.event_name == 'release'
     steps:
@@ -159,6 +161,8 @@ jobs:
   publish-firefox-amo:
     name: Publish Firefox Extension
     runs-on: ubuntu-latest
+    # Depends on validate-and-package which runs on all events (push/PR/release)
+    # This ensures artifacts are always available when this job runs on release events
     needs: validate-and-package
     if: github.event_name == 'release'
     steps:
