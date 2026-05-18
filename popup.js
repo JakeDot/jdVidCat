@@ -45,6 +45,20 @@ function buildJDownloaderLink(url) {
   return `dlapi://dl/${encodeURIComponent(url)}`;
 }
 
+function isBrowserDownloadFallback(filename) {
+  // Check if this was a browser download fallback
+  return filename && filename.includes("jdCatVid");
+}
+
+function buildBrowserDownloadLink(url) {
+  // For blob URLs and other unsupported formats, return null as they can't be directly downloaded
+  if (url.startsWith("blob:")) {
+    return null;
+  }
+  // For regular URLs, browser can download directly
+  return url;
+}
+
 function loadHistory() {
   chrome.runtime.sendMessage({ type: "jdcatvid:get-history" }, (response) => {
     if (chrome.runtime.lastError) {
@@ -99,13 +113,27 @@ function loadHistory() {
         const linkEl = document.createElement("a");
         linkEl.href = jdLink;
         linkEl.className = "history-item-link";
-        linkEl.title = "Open in jDownloader";
+        linkEl.title = "Open in jDownloader (if installed, otherwise browser will download)";
+        linkEl.target = "_blank";
         linkEl.textContent = "Open in jDownloader";
         
         item.appendChild(titleEl);
         item.appendChild(metaUrlEl);
         item.appendChild(metaTimeEl);
-        item.appendChild(linkEl);
+        
+        // Add fallback browser download link for non-blob URLs
+        if (!entry.url.startsWith("blob:")) {
+          item.appendChild(linkEl);
+          const browserLink = document.createElement("a");
+          browserLink.href = entry.url;
+          browserLink.className = "history-item-link";
+          browserLink.title = "Browser download (fallback)";
+          browserLink.target = "_blank";
+          browserLink.textContent = " | Browser Download";
+          item.appendChild(browserLink);
+        } else {
+          item.appendChild(linkEl);
+        }
         
         historyListNode.appendChild(item);
       });
@@ -154,8 +182,14 @@ startButton.addEventListener("click", async () => {
         return;
       }
 
-      const { downloaded, crawledPages, discoveredVideos } = response.result;
-      setStatus(`Downloaded ${downloaded} videos (crawled ${crawledPages} pages, found ${discoveredVideos} links).`);
+      const { downloaded, crawledPages, discoveredVideos, previewLinksFollowed } = response.result;
+      const details = [
+        `${downloaded} videos`,
+        `${crawledPages} pages`,
+        `${discoveredVideos} links found`,
+        `${previewLinksFollowed || 0} preview links followed`
+      ];
+      setStatus(`Downloaded ${details.join(", ")}.`);
     }
   );
 });
