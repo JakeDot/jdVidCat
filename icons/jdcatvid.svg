@@ -10,5 +10,5 @@
     </linearGradient>
   </defs>
   <rect width="128" height="128" rx="20" fill="#0f1016"/>
-  <path d="M36 28v38H22l42 42 42-42H92V28H36z" fill="url(#rainbow)" transform="rotate(-18 64 64)"/>
+  <path d="M36 28v38H22l42 42 42-42H92V28H36z" fill="url(#rainbow)" transform="rotate(-45 64 64)"/>
 </svg>
