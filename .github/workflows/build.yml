@@ -11,10 +11,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: version-bump-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   validate-and-package:
     name: Validate and Package Extension (ZIP/XPI/Chrome)
@@ -82,6 +78,9 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
+    concurrency:
+      group: version-bump-main
+      cancel-in-progress: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -91,10 +90,10 @@ jobs:
       - name: Bump version and create tag
         run: |
           # Check if the last commit was made by github-actions[bot] to prevent infinite loops
-          LAST_COMMIT_AUTHOR=$(git log -1 --pretty=format:'%an')
+          LAST_COMMIT_EMAIL=$(git log -1 --pretty=format:'%ae')
           LAST_COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')
           
-          if [ "$LAST_COMMIT_AUTHOR" = "github-actions[bot]" ]; then
+          if [ "$LAST_COMMIT_EMAIL" = "github-actions[bot]@users.noreply.github.com" ]; then
             echo "Last commit was made by github-actions[bot], skipping version bump"
             exit 0
           fi
@@ -120,6 +119,12 @@ jobs:
 
           # Parse version components
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          
+          # Validate that all components were parsed correctly
+          if [ -z "$MAJOR" ] || [ -z "$MINOR" ] || [ -z "$PATCH" ]; then
+            echo "Error: Failed to parse version components"
+            exit 1
+          fi
 
           # Bump patch version
           NEW_PATCH=$((PATCH + 1))
@@ -161,15 +166,53 @@ jobs:
             exit 1
           }
 
-          # Push changes and tag separately for better error visibility
-          git push origin main || {
-            echo "Error: Failed to push main branch"
-            exit 1
-          }
-          git push origin "v$NEW_VERSION" || {
-            echo "Error: Failed to push tag"
-            exit 1
-          }
+          # Push changes and tag with retry logic
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            # Pull latest changes and rebase to handle concurrent pushes
+            git pull --rebase origin main || {
+              echo "Warning: Failed to rebase on latest main (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                sleep 2
+                continue
+              else
+                echo "Error: Failed to rebase after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            }
+            
+            # Push branch and tag
+            git push origin main || {
+              echo "Warning: Failed to push main branch (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                sleep 2
+                continue
+              else
+                echo "Error: Failed to push main branch after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            }
+            
+            git push origin "v$NEW_VERSION" || {
+              echo "Warning: Failed to push tag (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                sleep 2
+                continue
+              else
+                echo "Error: Failed to push tag after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            }
+            
+            # Success
+            echo "Successfully pushed version bump and tag"
+            break
+          done
 
   publish-chrome-web-store:
     name: Publish Chrome Extension
