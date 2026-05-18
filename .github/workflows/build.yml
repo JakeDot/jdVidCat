@@ -178,19 +178,29 @@ jobs:
         if: steps.check_firefox_secrets.outputs.publish_enabled == 'true'
         uses: actions/checkout@v4
 
+      - name: Download packaged artifacts
+        if: steps.check_firefox_secrets.outputs.publish_enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/packaged-artifacts
+
       - name: Build Firefox source directory with gecko id
         if: steps.check_firefox_secrets.outputs.publish_enabled == 'true'
         env:
           FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
         run: |
+          rm -rf /tmp/firefox-src
           mkdir -p /tmp/firefox-src
-          rsync -a ./ /tmp/firefox-src/ \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude 'dist' \
-            --exclude 'web-ext-artifacts' \
-            --exclude '*.zip' \
-            --exclude '*.xpi'
+
+          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts -type f \( -iname '*firefox*.zip' -o -iname '*Firefox*.zip' \))
+          if [ "${#firefox_zip_candidates[@]}" -ne 1 ]; then
+            echo "Expected exactly one Firefox ZIP artifact, found ${#firefox_zip_candidates[@]}."
+            find /tmp/packaged-artifacts -type f -name '*.zip' -print
+            exit 1
+          fi
+
+          unzip -q "${firefox_zip_candidates[0]}" -d /tmp/firefox-src
+
           python3 - <<'PY'
           import json, os
           path = "/tmp/firefox-src/manifest.json"
