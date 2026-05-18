@@ -11,8 +11,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: github-pages-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -30,6 +30,7 @@ jobs:
 
       - name: Prepare Pages content
         run: |
+          set -e
           mkdir -p public
           cat > public/index.html <<'HTML'
           <!doctype html>
@@ -45,6 +46,20 @@ jobs:
           </body>
           </html>
           HTML
+          echo "Content created successfully"
+
+      - name: Validate Pages content
+        run: |
+          if [ ! -f public/index.html ]; then
+            echo "Error: public/index.html was not created"
+            exit 1
+          fi
+          if [ ! -s public/index.html ]; then
+            echo "Error: public/index.html is empty"
+            exit 1
+          fi
+          echo "Content validation passed"
+          echo "Content size: $(wc -c < public/index.html) bytes"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
