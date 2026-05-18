@@ -2,6 +2,8 @@
 
 **jdVidCat** is a Chrome extension (Manifest V3) that automatically detects HLS and DASH video stream manifests while you browse and hands their URLs off to [JDownloader 2](https://jdownloader.org/) for downloading.
 
+It is built for sites that hide video behind `blob:` playback URLs by capturing the underlying stream manifests (`.m3u8` / `.mpd`) and queueing them in JDownloader automatically.
+
 ## How It Works
 
 Modern video streaming sites (Twitch, Vimeo, etc.) use `blob:` URLs backed by HLS (`.m3u8`) or DASH (`.mpd`) adaptive streams. These streams can be gigabytes in size, making in-browser downloading impractical. Instead, jdVidCat acts as a **network sniffer**:
@@ -25,14 +27,25 @@ Modern video streaming sites (Twitch, Vimeo, etc.) use `blob:` URLs backed by HL
 4. Enable **Developer mode** (top-right toggle).
 5. Click **Load unpacked** and select the unzipped folder.
 
-## Usage
+## Screenshots
 
-- Browse to any page with a video stream (e.g. Twitch, Vimeo, a sports site).
-- jdVidCat will automatically detect and send manifest URLs to JDownloader 2.
-- Click the extension icon to see all captured stream URLs in the popup.
-- Use the **Send** button on any row to manually re-send a URL to JDownloader.
-- Use **Send all to JDownloader** to queue every captured URL at once.
-- Use **Clear list** to reset the captured URL list.
+### Popup (empty state)
+
+![jdVidCat popup empty state](docs/screenshots/popup-empty.png)
+
+### Popup (captured manifests)
+
+![jdVidCat popup with captured manifests](docs/screenshots/popup-populated.png)
+
+## Usage Guide
+
+1. Start [JDownloader 2](https://jdownloader.org/) and confirm its built-in web server / Click'N'Load endpoint is enabled on `127.0.0.1:9666` (see **Prerequisites** above).
+2. Open a page that plays HLS or DASH video streams (for example, Twitch or Vimeo).
+3. Let the video start playing so the manifest request is made.
+4. jdVidCat automatically captures manifest URLs and sends them to JDownloader.
+5. Click the jdVidCat extension icon to review captured URLs in the popup.
+6. Use **Send** on a single row to re-send one manifest, or **Send all to JDownloader** to queue everything.
+7. Use **Clear list** to reset the popup list.
 
 ## Permissions Used
 
