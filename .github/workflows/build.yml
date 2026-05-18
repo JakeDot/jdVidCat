@@ -88,8 +88,16 @@ jobs:
         run: |
           # Check if the last commit was made by github-actions[bot] to prevent infinite loops
           LAST_COMMIT_AUTHOR=$(git log -1 --pretty=format:'%an')
+          LAST_COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')
+          
           if [ "$LAST_COMMIT_AUTHOR" = "github-actions[bot]" ]; then
             echo "Last commit was made by github-actions[bot], skipping version bump"
+            exit 0
+          fi
+          
+          # Check if commit message contains [skip-version-bump] marker
+          if [[ "$LAST_COMMIT_MESSAGE" == *"[skip-version-bump]"* ]]; then
+            echo "Commit message contains [skip-version-bump], skipping version bump"
             exit 0
           fi
 
@@ -125,7 +133,7 @@ jobs:
             echo "Error: Failed to create temporary file"
             exit 1
           }
-          trap "rm -f $TEMP_FILE" EXIT
+          trap 'rm -f "$TEMP_FILE"' EXIT
 
           jq ".version = \"$NEW_VERSION\"" manifest.json > "$TEMP_FILE" || {
             echo "Error: Failed to update manifest.json"
@@ -146,6 +154,12 @@ jobs:
           }
           git tag -a "v$NEW_VERSION" -m "Release version $NEW_VERSION" || {
             echo "Error: Failed to create tag"
+            exit 1
+          }
+
+          # Pull latest changes before pushing to handle concurrent pushes
+          git pull --rebase origin main || {
+            echo "Error: Failed to rebase on latest main"
             exit 1
           }
 
