@@ -79,7 +79,7 @@ jobs:
           echo "✓ jdVidCat.zip created successfully"
 
           # Create Firefox XPI (copy and rename - XPI is just a ZIP with .xpi extension)
-          # Note: The actual Firefox build with gecko ID happens in the publish-firefox-amo job
+          # Note: This is a generic XPI. The Firefox-specific gecko ID is injected during publishing.
           echo "Creating Firefox XPI..."
           cp jdVidCat.zip jdVidCat.xpi
           test -f jdVidCat.xpi || { echo "✗ Failed to create jdVidCat.xpi"; exit 1; }
@@ -194,10 +194,10 @@ jobs:
           rm -rf /tmp/firefox-src
           mkdir -p /tmp/firefox-src
 
-          # Find the Firefox artifact (XPI file in jdVidCat-firefox directory)
-          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts -type f \( -iname '*.xpi' -o -iname '*firefox*.zip' \))
+          # Find the Firefox XPI artifact (in jdVidCat-firefox artifact directory)
+          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts/jdVidCat-firefox -type f \( -iname '*.xpi' -o -iname '*.zip' \) 2>/dev/null)
           if [ "${#firefox_zip_candidates[@]}" -ne 1 ]; then
-            echo "Expected exactly one Firefox artifact, found ${#firefox_zip_candidates[@]}."
+            echo "Expected exactly one Firefox artifact in jdVidCat-firefox directory, found ${#firefox_zip_candidates[@]}."
             find /tmp/packaged-artifacts -type f \( -name '*.zip' -o -name '*.xpi' \) -print
             exit 1
           fi
