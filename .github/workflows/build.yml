@@ -145,14 +145,14 @@ jobs:
 
       - name: Upload and publish to Chrome Web Store
         if: steps.check_chrome_secrets.outputs.publish_enabled == 'true'
-        uses: fregante/upload-chrome-extension@v4
+        uses: mobilefirstllc/cws-publish@569e87bc9a54ad7712ba6dc154a110d88af63b85
         with:
-          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
-          client-id: ${{ secrets.CHROME_CLIENT_ID }}
-          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
-          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          zip: dist/jdVidCat-chrome.zip
-          publish: true
+          action: publish
+          extension_id: ${{ secrets.CHROME_EXTENSION_ID }}
+          client_id: ${{ secrets.CHROME_CLIENT_ID }}
+          client_secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+          refresh_token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          zip_file: dist/jdVidCat-chrome.zip
 
   publish-firefox-amo:
     name: Publish Firefox Extension
@@ -184,7 +184,8 @@ jobs:
           FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
         run: |
           mkdir -p /tmp/firefox-src
-          cp -r manifest.json background.js popup.html popup.js icons /tmp/firefox-src/
+          cp -r . /tmp/firefox-src/
+          rm -rf /tmp/firefox-src/.git /tmp/firefox-src/.github
           python3 - <<'PY'
           import json, os
           path = "/tmp/firefox-src/manifest.json"
@@ -202,7 +203,7 @@ jobs:
           AMO_API_KEY: ${{ secrets.FIREFOX_JWT_ISSUER }}
           AMO_API_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
         run: |
-          npm install --global web-ext
+          npm install --global web-ext@10.1.0
           web-ext sign \
             --source-dir /tmp/firefox-src \
             --artifacts-dir /tmp/firefox-artifacts \
