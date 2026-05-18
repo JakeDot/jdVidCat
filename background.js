@@ -218,7 +218,7 @@ async function getDownloadHistory() {
 async function addDownloadToHistory(url, filename) {
   const history = await getDownloadHistory();
   const entry = {
-    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
     url,
     filename,
     timestamp: new Date().toISOString(),
@@ -231,7 +231,11 @@ async function addDownloadToHistory(url, filename) {
   }
   await chrome.storage.local.set({ downloadHistory: history });
   // Notify popup if open
-  chrome.runtime.sendMessage({ type: "jdcatvid:history-updated", history }).catch(() => {});
+  chrome.runtime.sendMessage({ type: "jdcatvid:history-updated", history }).catch((err) => {
+    if (err.message !== "Could not establish connection. Receiving end does not exist.") {
+      console.warn("Failed to notify popup of history update:", err);
+    }
+  });
   return entry;
 }
 

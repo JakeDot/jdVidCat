@@ -61,21 +61,48 @@ async function loadHistory() {
       .slice()
       .reverse()
       .map((entry) => {
-        const url = new URL(entry.url);
-        const displayUrl = url.hostname ? `${url.hostname}${url.pathname.substring(0, 50)}...` : entry.url.substring(0, 60) + "...";
+        let displayUrl = "Unknown";
+        try {
+          const url = new URL(entry.url);
+          const pathPart = url.pathname.substring(0, 50);
+          displayUrl = pathPart.length >= 50 ? `${url.hostname}${pathPart}...` : `${url.hostname}${pathPart}`;
+        } catch {
+          // Handle invalid URLs (e.g., blob URLs, malformed URLs)
+          displayUrl = entry.url.substring(0, 60) + (entry.url.length > 60 ? "..." : "");
+        }
         const timestamp = new Date(entry.timestamp).toLocaleString();
         const jdLink = buildJDownloaderLink(entry.url);
         
-        return `
-          <div class="history-item">
-            <div class="history-item-title">${entry.filename}</div>
-            <div class="history-item-meta">${displayUrl}</div>
-            <div class="history-item-meta">${timestamp}</div>
-            <a href="${jdLink}" class="history-item-link" title="Open in jDownloader">Open in jDownloader</a>
-          </div>
-        `;
+        // Create elements safely to prevent XSS
+        const item = document.createElement("div");
+        item.className = "history-item";
+        
+        const titleEl = document.createElement("div");
+        titleEl.className = "history-item-title";
+        titleEl.textContent = entry.filename;
+        
+        const metaUrlEl = document.createElement("div");
+        metaUrlEl.className = "history-item-meta";
+        metaUrlEl.textContent = displayUrl;
+        
+        const metaTimeEl = document.createElement("div");
+        metaTimeEl.className = "history-item-meta";
+        metaTimeEl.textContent = timestamp;
+        
+        const linkEl = document.createElement("a");
+        linkEl.href = jdLink;
+        linkEl.className = "history-item-link";
+        linkEl.title = "Open in jDownloader";
+        linkEl.textContent = "Open in jDownloader";
+        
+        item.appendChild(titleEl);
+        item.appendChild(metaUrlEl);
+        item.appendChild(metaTimeEl);
+        item.appendChild(linkEl);
+        
+        return item;
       })
-      .join("");
+      .forEach((item) => historyListNode.appendChild(item));
   });
 }
 
