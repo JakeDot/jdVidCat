@@ -67,23 +67,24 @@ jobs:
       - name: Package all extension formats
         run: |
           echo "Packaging extensions in multiple formats..."
+          # Define files to include in all packages
           FILES="manifest.json background.js popup.html popup.js icons/"
 
           # Create generic ZIP
           echo "Creating generic ZIP..."
-          zip -q -r jdVidCat.zip $FILES
+          zip -q -r jdVidCat.zip ${FILES}
           test -f jdVidCat.zip || { echo "✗ Failed to create jdVidCat.zip"; exit 1; }
           echo "✓ jdVidCat.zip created successfully"
 
           # Create Firefox XPI (XPI is essentially a ZIP with .xpi extension)
           echo "Creating Firefox XPI..."
-          zip -q -r jdVidCat.xpi $FILES
+          zip -q -r jdVidCat.xpi ${FILES}
           test -f jdVidCat.xpi || { echo "✗ Failed to create jdVidCat.xpi"; exit 1; }
           echo "✓ jdVidCat.xpi created successfully"
 
           # Create Chrome extension ZIP
           echo "Creating Chrome extension ZIP..."
-          zip -q -r jdVidCat-chrome.zip $FILES
+          zip -q -r jdVidCat-chrome.zip ${FILES}
           test -f jdVidCat-chrome.zip || { echo "✗ Failed to create jdVidCat-chrome.zip"; exit 1; }
           echo "✓ jdVidCat-chrome.zip created successfully"
 
