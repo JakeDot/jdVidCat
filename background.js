@@ -1,5 +1,8 @@
 const DEFAULT_MAX_DOWNLOADS = 100;
 const VIDEO_EXTENSIONS = ["mp4", "m4v", "webm", "mov", "mkv", "avi", "m3u8"];
+const MAX_HISTORY_ENTRIES = 100;
+const MAX_PATHNAME_LENGTH = 50;
+const MAX_URL_DISPLAY_LENGTH = 60;
 
 function normalizeUrl(value) {
   if (!value) {
@@ -230,17 +233,14 @@ async function addDownloadToHistory(url, filename) {
     status: "completed"
   };
   history.push(entry);
-  // Keep only last 100 downloads
-  if (history.length > 100) {
+  // Keep only last MAX_HISTORY_ENTRIES downloads
+  if (history.length > MAX_HISTORY_ENTRIES) {
     history.shift();
   }
   await chrome.storage.local.set({ downloadHistory: history });
-  // Notify popup if open
-  chrome.runtime.sendMessage({ type: "jdcatvid:history-updated", history }).catch((err) => {
-    // Only log unexpected errors, not the expected "no receivers" error
-    if (err.message && !err.message.includes("Receiving end does not exist")) {
-      console.warn("Failed to notify popup of history update:", err);
-    }
+  // Notify popup if open (popup might not be open, which is expected)
+  chrome.runtime.sendMessage({ type: "jdcatvid:history-updated", history }).catch(() => {
+    // Silently ignore errors - this is expected when popup is not open
   });
   return entry;
 }

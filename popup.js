@@ -38,8 +38,9 @@ function setStatus(text) {
 }
 
 function buildJDownloaderLink(url) {
-  // jDownloader uses a protocol handler or can be called via URLs
-  // The basic approach is to encode the URL for jDownloader
+  // jDownloader supports the dlapi:// protocol handler for adding downloads
+  // This requires jDownloader to be installed with the protocol handler registered
+  // If jDownloader is not available, the link will not work but won't cause errors
   return `dlapi://dl/${encodeURIComponent(url)}`;
 }
 
@@ -71,8 +72,10 @@ async function loadHistory() {
         let displayUrl = "Unknown";
         try {
           const url = new URL(entry.url);
+          const origPathLen = url.pathname.length;
           const pathPart = url.pathname.substring(0, MAX_PATHNAME_LENGTH);
-          displayUrl = pathPart.length >= MAX_PATHNAME_LENGTH ? `${url.hostname}${pathPart}...` : `${url.hostname}${pathPart}`;
+          // Truncate if original pathname was longer
+          displayUrl = origPathLen > MAX_PATHNAME_LENGTH ? `${url.hostname}${pathPart}...` : `${url.hostname}${pathPart}`;
         } catch {
           // Handle invalid URLs (e.g., blob URLs, malformed URLs)
           displayUrl = entry.url.substring(0, MAX_URL_DISPLAY_LENGTH) + (entry.url.length > MAX_URL_DISPLAY_LENGTH ? "..." : "");
