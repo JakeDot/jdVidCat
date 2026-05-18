@@ -67,36 +67,24 @@ jobs:
       - name: Package extension as ZIP
         run: |
           echo "Packaging extension..."
-          zip -r jdVidCat.zip \
-            manifest.json \
-            background.js \
-            popup.html \
-            popup.js \
-            icons/
+          FILES="manifest.json background.js popup.html popup.js icons/"
+          zip -r jdVidCat.zip $FILES
           echo "Package created: jdVidCat.zip"
           unzip -l jdVidCat.zip
 
       - name: Package Firefox XPI
         run: |
           echo "Packaging Firefox XPI extension..."
-          zip -r jdVidCat.xpi \
-            manifest.json \
-            background.js \
-            popup.html \
-            popup.js \
-            icons/
+          FILES="manifest.json background.js popup.html popup.js icons/"
+          zip -r jdVidCat.xpi $FILES
           echo "Package created: jdVidCat.xpi"
           unzip -l jdVidCat.xpi
 
       - name: Package Chrome Extension
         run: |
           echo "Packaging Chrome extension..."
-          zip -r jdVidCat-chrome.zip \
-            manifest.json \
-            background.js \
-            popup.html \
-            popup.js \
-            icons/
+          FILES="manifest.json background.js popup.html popup.js icons/"
+          zip -r jdVidCat-chrome.zip $FILES
           echo "Package created: jdVidCat-chrome.zip"
           unzip -l jdVidCat-chrome.zip
 
