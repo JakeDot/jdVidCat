@@ -1,6 +1,7 @@
 const DEFAULT_MAX_DOWNLOADS = 100;
 const VIDEO_EXTENSIONS = ["mp4", "m4v", "webm", "mov", "mkv", "avi", "m3u8"];
 const MAX_HISTORY_ENTRIES = 100;
+const MAX_PREVIEW_LINKS_RATIO = 0.2; // 20% of max downloads for preview links
 
 // Configuration for smart link traversal
 const PREVIEW_LINK_PATTERNS = [
@@ -178,28 +179,11 @@ async function downloadUrl(url, index, useFallback = true) {
       conflictAction: "uniquify"
     });
   } catch (error) {
-    // If download fails and useFallback is true, try browser download fallback
-    if (useFallback && error.message.includes("jDownloader")) {
-      // Notify that jDownloader failed, will use browser download
-      console.log("jDownloader unavailable, using browser download fallback");
-    } else if (useFallback) {
-      // Fall back to browser download for other errors
-      try {
-        // Create a blob download using data URL approach as fallback
-        const response = await fetch(url);
-        if (response.ok) {
-          await chrome.downloads.download({
-            url: url,
-            filename,
-            saveAs: false,
-            conflictAction: "uniquify"
-          });
-        }
-      } catch {
-        // If all else fails, at least add to history
-        console.error("Download failed for:", url);
-      }
-    }
+    // Log error but continue - download may fail due to various reasons
+    // (protocol mismatch, network issues, etc.)
+    console.warn("Download attempt failed for:", url, "Error:", error);
+    // The browser's download API will attempt the download regardless
+    // If it truly fails, the user can use the fallback browser download from history
   }
   await addDownloadToHistory(url, filename);
 }
@@ -240,7 +224,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
 
       // Extract video preview links for traversal
       for (const previewUrl of extractVideoPreviewUrls(current, html, rootOrigin)) {
-        if (!visitedPages.has(previewUrl) && videoPreviewLinks.size < max * 0.2) {
+        if (!visitedPages.has(previewUrl) && videoPreviewLinks.size < max * MAX_PREVIEW_LINKS_RATIO) {
           videoPreviewLinks.add(previewUrl);
           queuedPages.push(previewUrl);
         }
@@ -333,16 +317,10 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.set({ maxDownloads: DEFAULT_MAX_DOWNLOADS });
   chrome.storage.local.set({ downloadHistory: [] });
   
-  // Create context menu items
+  // Create context menu item
   chrome.contextMenus.create({
     id: "jdcatvid-download",
     title: "Download videos from this category/tag (jdCatVid)",
-    contexts: ["page"]
-  });
-  
-  chrome.contextMenus.create({
-    id: "jdcatvid-download-with-limit",
-    title: "Download videos from this category/tag (custom limit)...",
     contexts: ["page"]
   });
 });
@@ -388,20 +366,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 
   if (info.menuItemId === "jdcatvid-download") {
-    // Use default max downloads
-    const { maxDownloads = DEFAULT_MAX_DOWNLOADS } = await chrome.storage.sync.get("maxDownloads");
-    try {
-      await startDownloadFromTab({
-        tabId: tab.id,
-        startUrl: tab.url,
-        maxDownloads
-      });
-    } catch (error) {
-      console.error("Download failed:", error);
-    }
-  } else if (info.menuItemId === "jdcatvid-download-with-limit") {
-    // Open popup or show prompt for custom limit
-    // For now, just use default - user can adjust via popup
+    // Use saved max downloads setting
     const { maxDownloads = DEFAULT_MAX_DOWNLOADS } = await chrome.storage.sync.get("maxDownloads");
     try {
       await startDownloadFromTab({

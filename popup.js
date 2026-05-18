@@ -45,20 +45,6 @@ function buildJDownloaderLink(url) {
   return `dlapi://dl/${encodeURIComponent(url)}`;
 }
 
-function isBrowserDownloadFallback(filename) {
-  // Check if this was a browser download fallback
-  return filename && filename.includes("jdCatVid");
-}
-
-function buildBrowserDownloadLink(url) {
-  // For blob URLs and other unsupported formats, return null as they can't be directly downloaded
-  if (url.startsWith("blob:")) {
-    return null;
-  }
-  // For regular URLs, browser can download directly
-  return url;
-}
-
 function loadHistory() {
   chrome.runtime.sendMessage({ type: "jdcatvid:get-history" }, (response) => {
     if (chrome.runtime.lastError) {
