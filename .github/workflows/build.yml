@@ -72,21 +72,22 @@ jobs:
           # Define files to include in all packages
           FILES="manifest.json background.js popup.html popup.js icons/"
 
-          # Create generic ZIP
+          # Create generic ZIP (build once)
           echo "Creating generic ZIP..."
           zip -q -r jdVidCat.zip ${FILES}
           test -f jdVidCat.zip || { echo "✗ Failed to create jdVidCat.zip"; exit 1; }
           echo "✓ jdVidCat.zip created successfully"
 
-          # Create Firefox XPI (XPI is essentially a ZIP with .xpi extension)
+          # Create Firefox XPI (copy and rename - XPI is just a ZIP with .xpi extension)
+          # Note: The actual Firefox build with gecko ID happens in the publish-firefox-amo job
           echo "Creating Firefox XPI..."
-          zip -q -r jdVidCat.xpi ${FILES}
+          cp jdVidCat.zip jdVidCat.xpi
           test -f jdVidCat.xpi || { echo "✗ Failed to create jdVidCat.xpi"; exit 1; }
           echo "✓ jdVidCat.xpi created successfully"
 
-          # Create Chrome extension ZIP
+          # Create Chrome extension ZIP (copy and rename for clarity)
           echo "Creating Chrome extension ZIP..."
-          zip -q -r jdVidCat-chrome.zip ${FILES}
+          cp jdVidCat.zip jdVidCat-chrome.zip
           test -f jdVidCat-chrome.zip || { echo "✗ Failed to create jdVidCat-chrome.zip"; exit 1; }
           echo "✓ jdVidCat-chrome.zip created successfully"
 
@@ -133,7 +134,7 @@ jobs:
             echo "publish_enabled=true" >> "${GITHUB_OUTPUT}"
           else
             echo "publish_enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "Skipping Chrome publish: one or more required secrets are missing."
+            echo "::warning::Chrome Web Store publishing skipped: one or more required secrets (CHROME_CLIENT_ID, CHROME_CLIENT_SECRET, CHROME_REFRESH_TOKEN, CHROME_EXTENSION_ID) are missing or empty."
           fi
 
       - name: Download Chrome extension artifact
@@ -145,7 +146,8 @@ jobs:
 
       - name: Upload and publish to Chrome Web Store
         if: steps.check_chrome_secrets.outputs.publish_enabled == 'true'
-        uses: mobilefirstllc/cws-publish@v2.1.1
+        # Pin to commit SHA for security (v2.0.5)
+        uses: mobilefirstllc/cws-publish@058ab4c4b3c67541706a3f9fc974810427dce113
         with:
           action: publish
           extension_id: ${{ secrets.CHROME_EXTENSION_ID }}
@@ -171,7 +173,7 @@ jobs:
             echo "publish_enabled=true" >> "${GITHUB_OUTPUT}"
           else
             echo "publish_enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "Skipping Firefox publish: one or more required secrets are missing."
+            echo "::warning::Firefox AMO publishing skipped: one or more required secrets (FIREFOX_JWT_ISSUER, FIREFOX_JWT_SECRET, FIREFOX_EXTENSION_ID) are missing or empty."
           fi
 
       - name: Checkout repository
@@ -201,6 +203,7 @@ jobs:
 
           unzip -q "${firefox_zip_candidates[0]}" -d /tmp/firefox-src
 
+          # Inject Firefox-specific gecko ID into manifest
           python3 - <<'PY'
           import json, os
           path = "/tmp/firefox-src/manifest.json"
@@ -212,18 +215,19 @@ jobs:
               f.write("\n")
           PY
 
+      # NOTE: This step requires the extension to already be listed on AMO.
+      # The first listing must be done manually via the AMO developer hub.
+      # Subsequent releases can be automated with this workflow.
       - name: Submit signed build to Firefox Add-ons (AMO)
         if: steps.check_firefox_secrets.outputs.publish_enabled == 'true'
-        env:
-          AMO_API_KEY: ${{ secrets.FIREFOX_JWT_ISSUER }}
-          AMO_API_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
         run: |
           npm install --global web-ext@10.1.0
+          # web-ext uses WEB_EXT_API_KEY and WEB_EXT_API_SECRET env vars by default
+          WEB_EXT_API_KEY="${{ secrets.FIREFOX_JWT_ISSUER }}" \
+          WEB_EXT_API_SECRET="${{ secrets.FIREFOX_JWT_SECRET }}" \
           web-ext sign \
             --source-dir /tmp/firefox-src \
             --artifacts-dir /tmp/firefox-artifacts \
             --channel listed \
-            --api-key "${AMO_API_KEY}" \
-            --api-secret "${AMO_API_SECRET}" \
             --no-input
 
