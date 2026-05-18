@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: version-bump-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate-and-package:
     name: Validate and Package Extension (ZIP/XPI/Chrome)
@@ -157,15 +161,13 @@ jobs:
             exit 1
           }
 
-          # Pull latest changes before pushing to handle concurrent pushes
-          git pull --rebase origin main || {
-            echo "Error: Failed to rebase on latest main"
+          # Push changes and tag separately for better error visibility
+          git push origin main || {
+            echo "Error: Failed to push main branch"
             exit 1
           }
-
-          # Push changes and tag together
-          git push origin main "v$NEW_VERSION" || {
-            echo "Error: Failed to push main branch and tag"
+          git push origin "v$NEW_VERSION" || {
+            echo "Error: Failed to push tag"
             exit 1
           }
 
