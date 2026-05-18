@@ -123,12 +123,14 @@ async function convertBlobToDataUrl(tabId, blobUrl) {
 }
 
 async function downloadUrl(url, index) {
+  const filename = filenameFromUrl(url, index);
   await chrome.downloads.download({
     url,
-    filename: filenameFromUrl(url, index),
+    filename,
     saveAs: false,
     conflictAction: "uniquify"
   });
+  await addDownloadToHistory(url, filename);
 }
 
 async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MAX_DOWNLOADS }) {
@@ -189,12 +191,14 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
         continue;
       }
 
+      const filename = `jdCatVid/${String(downloaded + 1).padStart(3, "0")}-blob.mp4`;
       await chrome.downloads.download({
         url: blobResult.dataUrl,
-        filename: `jdCatVid/${String(downloaded + 1).padStart(3, "0")}-blob.mp4`,
+        filename,
         saveAs: false,
         conflictAction: "uniquify"
       });
+      await addDownloadToHistory(blobUrl, filename);
       downloaded += 1;
     }
   }
@@ -206,11 +210,57 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
   };
 }
 
+async function getDownloadHistory() {
+  const { downloadHistory = [] } = await chrome.storage.local.get("downloadHistory");
+  return downloadHistory;
+}
+
+async function addDownloadToHistory(url, filename) {
+  const history = await getDownloadHistory();
+  const entry = {
+    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    url,
+    filename,
+    timestamp: new Date().toISOString(),
+    status: "completed"
+  };
+  history.push(entry);
+  // Keep only last 100 downloads
+  if (history.length > 100) {
+    history.shift();
+  }
+  await chrome.storage.local.set({ downloadHistory: history });
+  // Notify popup if open
+  chrome.runtime.sendMessage({ type: "jdcatvid:history-updated", history }).catch(() => {});
+  return entry;
+}
+
+async function clearDownloadHistory() {
+  await chrome.storage.local.set({ downloadHistory: [] });
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.set({ maxDownloads: DEFAULT_MAX_DOWNLOADS });
+  chrome.storage.local.set({ downloadHistory: [] });
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "jdcatvid:get-history") {
+    (async () => {
+      const history = await getDownloadHistory();
+      sendResponse({ ok: true, history });
+    })();
+    return true;
+  }
+
+  if (message?.type === "jdcatvid:clear-history") {
+    (async () => {
+      await clearDownloadHistory();
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+
   if (message?.type !== "jdcatvid:start") {
     return;
   }
