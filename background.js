@@ -12,16 +12,6 @@ const PREVIEW_LINK_PATTERNS = [
   /snapshot/i
 ];
 
-const VIDEO_PREVIEW_SELECTORS = [
-  'a[href*="preview"]',
-  'a[href*="watch"]',
-  'a[href*="video"]',
-  'a[href*="play"]',
-  '[data-video]',
-  'a.video-link',
-  'a.play-link'
-];
-
 function normalizeUrl(value) {
   if (!value) {
     return null;
@@ -226,7 +216,6 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
       for (const previewUrl of extractVideoPreviewUrls(current, html, rootOrigin)) {
         if (!visitedPages.has(previewUrl) && videoPreviewLinks.size < maxPreviewLinks) {
           videoPreviewLinks.add(previewUrl);
-          visitedPages.add(previewUrl);
           queuedPages.push(previewUrl);
         }
       }

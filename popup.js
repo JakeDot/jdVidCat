@@ -167,13 +167,8 @@ startButton.addEventListener("click", async () => {
       }
 
       const { downloaded, crawledPages, discoveredVideos, previewLinksFollowed } = response.result;
-      const details = [
-        `${downloaded} videos`,
-        `${crawledPages} pages`,
-        `${discoveredVideos} links found`,
-        `${previewLinksFollowed} preview links followed`
-      ];
-      setStatus(`Downloaded ${details.join(", ")}.`);
+      const details = `${downloaded} video(s) from ${crawledPages} page(s) - ${discoveredVideos} links found, ${previewLinksFollowed} preview link(s) followed`;
+      setStatus(`Downloaded ${details}.`);
     }
   );
 });
