@@ -194,10 +194,11 @@ jobs:
           rm -rf /tmp/firefox-src
           mkdir -p /tmp/firefox-src
 
-          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts -type f \( -iname '*firefox*.zip' -o -iname '*Firefox*.zip' \))
+          # Find the Firefox artifact (XPI file in jdVidCat-firefox directory)
+          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts -type f \( -iname '*.xpi' -o -iname '*firefox*.zip' \))
           if [ "${#firefox_zip_candidates[@]}" -ne 1 ]; then
-            echo "Expected exactly one Firefox ZIP artifact, found ${#firefox_zip_candidates[@]}."
-            find /tmp/packaged-artifacts -type f -name '*.zip' -print
+            echo "Expected exactly one Firefox artifact, found ${#firefox_zip_candidates[@]}."
+            find /tmp/packaged-artifacts -type f \( -name '*.zip' -o -name '*.xpi' \) -print
             exit 1
           fi
 
