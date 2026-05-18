@@ -110,9 +110,14 @@ jobs:
             exit 0
           fi
 
-          # Update manifest.json with new version
-          jq ".version = \"$NEW_VERSION\"" manifest.json > manifest.json.tmp
-          mv manifest.json.tmp manifest.json
+          # Update manifest.json with new version using jq with backup
+          jq ".version = \"$NEW_VERSION\"" manifest.json > manifest.json.bak
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to update manifest.json"
+            rm -f manifest.json.bak
+            exit 1
+          fi
+          mv manifest.json.bak manifest.json
 
           # Commit and tag
           git config user.name "github-actions[bot]"
@@ -121,9 +126,8 @@ jobs:
           git commit -m "Bump version to $NEW_VERSION"
           git tag -a "v$NEW_VERSION" -m "Release version $NEW_VERSION"
 
-          # Push changes and tag
-          git push origin main
-          git push origin "v$NEW_VERSION"
+          # Push changes and tag atomically to prevent race conditions
+          git push --atomic origin main "v$NEW_VERSION"
 
   publish-chrome-web-store:
     name: Publish Chrome Extension
