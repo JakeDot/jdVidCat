@@ -43,6 +43,9 @@ function buildJDownloaderLink(url) {
   return `dlapi://dl/${encodeURIComponent(url)}`;
 }
 
+const MAX_PATHNAME_LENGTH = 50;
+const MAX_URL_DISPLAY_LENGTH = 60;
+
 async function loadHistory() {
   chrome.runtime.sendMessage({ type: "jdcatvid:get-history" }, (response) => {
     if (chrome.runtime.lastError) {
@@ -57,18 +60,22 @@ async function loadHistory() {
       return;
     }
 
-    historyListNode.innerHTML = history
+    // Clear previous history
+    historyListNode.innerHTML = "";
+    
+    // Build and append elements
+    history
       .slice()
       .reverse()
-      .map((entry) => {
+      .forEach((entry) => {
         let displayUrl = "Unknown";
         try {
           const url = new URL(entry.url);
-          const pathPart = url.pathname.substring(0, 50);
-          displayUrl = pathPart.length >= 50 ? `${url.hostname}${pathPart}...` : `${url.hostname}${pathPart}`;
+          const pathPart = url.pathname.substring(0, MAX_PATHNAME_LENGTH);
+          displayUrl = pathPart.length >= MAX_PATHNAME_LENGTH ? `${url.hostname}${pathPart}...` : `${url.hostname}${pathPart}`;
         } catch {
           // Handle invalid URLs (e.g., blob URLs, malformed URLs)
-          displayUrl = entry.url.substring(0, 60) + (entry.url.length > 60 ? "..." : "");
+          displayUrl = entry.url.substring(0, MAX_URL_DISPLAY_LENGTH) + (entry.url.length > MAX_URL_DISPLAY_LENGTH ? "..." : "");
         }
         const timestamp = new Date(entry.timestamp).toLocaleString();
         const jdLink = buildJDownloaderLink(entry.url);
@@ -100,9 +107,8 @@ async function loadHistory() {
         item.appendChild(metaTimeEl);
         item.appendChild(linkEl);
         
-        return item;
-      })
-      .forEach((item) => historyListNode.appendChild(item));
+        historyListNode.appendChild(item);
+      });
   });
 }
 
