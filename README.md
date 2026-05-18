@@ -19,6 +19,9 @@ JakeDot Video Category Downloader
 3. Select **Load unpacked** and choose this repository folder.
 4. Open a category/tag page and click the `jdCatVid` extension popup button.
 
-### Build artifact
+### Build artifacts
 
-A GitHub Actions workflow in `.github/workflows/build.yml` validates the extension files and creates `jdCatVid.zip`.
+A GitHub Actions workflow in `.github/workflows/build.yml` validates the extension files and creates three distribution formats:
+- `jdCatVid.zip` - Generic extension package
+- `jdCatVid.xpi` - Firefox add-on format
+- `jdCatVid-chrome.zip` - Chrome extension format

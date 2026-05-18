@@ -27,16 +27,39 @@ jobs:
       - name: Lint manifest JSON
         run: jq . manifest.json > /dev/null
 
-      - name: Build extension artifact
+      - name: Validate JavaScript syntax
+        run: |
+          node --check background.js
+          node --check content.js
+          node --check popup.js
+
+      - name: Build extension artifacts
         run: |
           mkdir -p dist
+          # Create base ZIP (generic)
           zip -r dist/jdCatVid.zip manifest.json background.js content.js popup.html popup.js icons
+          # Create XPI for Firefox (same content, different extension)
+          cp dist/jdCatVid.zip dist/jdCatVid.xpi
+          # Create Chrome extension (same content)
+          cp dist/jdCatVid.zip dist/jdCatVid-chrome.zip
 
-      - name: Upload artifact
+      - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jdCatVid-extension
+          name: jdCatVid-zip
           path: dist/jdCatVid.zip
+
+      - name: Upload XPI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jdCatVid-xpi
+          path: dist/jdCatVid.xpi
+
+      - name: Upload Chrome artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jdCatVid-chrome
+          path: dist/jdCatVid-chrome.zip
 
   gemini-code-assist:
     runs-on: ubuntu-latest
