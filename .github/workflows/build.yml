@@ -64,28 +64,35 @@ jobs:
           node --check background.js && echo "  background.js OK"
           node --check popup.js     && echo "  popup.js OK"
 
-      - name: Package extension as ZIP
+      - name: Package all extension formats
         run: |
-          echo "Packaging extension..."
+          echo "Packaging extensions in multiple formats..."
           FILES="manifest.json background.js popup.html popup.js icons/"
+
+          # Create generic ZIP
+          echo "Creating generic ZIP..."
           zip -r jdVidCat.zip $FILES
-          echo "Package created: jdVidCat.zip"
-          unzip -l jdVidCat.zip
+          test -f jdVidCat.zip && echo "✓ jdVidCat.zip created successfully"
 
-      - name: Package Firefox XPI
-        run: |
-          echo "Packaging Firefox XPI extension..."
-          FILES="manifest.json background.js popup.html popup.js icons/"
+          # Create Firefox XPI
+          echo "Creating Firefox XPI..."
           zip -r jdVidCat.xpi $FILES
-          echo "Package created: jdVidCat.xpi"
-          unzip -l jdVidCat.xpi
+          test -f jdVidCat.xpi && echo "✓ jdVidCat.xpi created successfully"
 
-      - name: Package Chrome Extension
-        run: |
-          echo "Packaging Chrome extension..."
-          FILES="manifest.json background.js popup.html popup.js icons/"
+          # Create Chrome extension ZIP
+          echo "Creating Chrome extension ZIP..."
           zip -r jdVidCat-chrome.zip $FILES
-          echo "Package created: jdVidCat-chrome.zip"
+          test -f jdVidCat-chrome.zip && echo "✓ jdVidCat-chrome.zip created successfully"
+
+          echo ""
+          echo "All packages created. Verifying contents:"
+          echo "=== Generic ZIP ==="
+          unzip -l jdVidCat.zip
+          echo ""
+          echo "=== Firefox XPI ==="
+          unzip -l jdVidCat.xpi
+          echo ""
+          echo "=== Chrome ZIP ==="
           unzip -l jdVidCat-chrome.zip
 
       - name: Upload Generic ZIP artifact
