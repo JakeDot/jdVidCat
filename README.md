@@ -39,7 +39,7 @@ Modern video streaming sites (Twitch, Vimeo, etc.) use `blob:` URLs backed by HL
 
 ## Usage Guide
 
-1. Start [JDownloader 2](https://jdownloader.org/) and confirm the local API is enabled.
+1. Start [JDownloader 2](https://jdownloader.org/) and confirm its built-in web server / Click'N'Load endpoint is enabled on `127.0.0.1:9666` (see **Prerequisites** above).
 2. Open a page that plays HLS or DASH video streams (for example, Twitch or Vimeo).
 3. Let the video start playing so the manifest request is made.
 4. jdVidCat automatically captures manifest URLs and sends them to JDownloader.
