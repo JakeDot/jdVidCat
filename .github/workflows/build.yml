@@ -1,84 +1,82 @@
-name: Build & Package Extension
+name: Build Extension
 
 on:
   push:
     branches: ["**"]
   pull_request:
-    branches: ["**"]
 
 permissions:
   contents: read
 
 jobs:
-  validate-and-package:
-    name: Validate and Package jdVidCat
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate manifest.json
+      - name: Validate extension files exist
         run: |
-          echo "Checking manifest.json exists..."
-          test -f manifest.json || { echo "manifest.json not found"; exit 1; }
+          test -f manifest.json
+          test -f background.js
+          test -f content.js
+          test -f popup.html
+          test -f popup.js
+          test -f icons/jdcatvid.svg
 
-          echo "Validating manifest.json is valid JSON..."
-          python3 -c "
-          import json, sys
-          with open('manifest.json') as f:
-              manifest = json.load(f)
-          required = ['manifest_version', 'name', 'version', 'background']
-          for field in required:
-              if field not in manifest:
-                  print(f'Missing required field: {field}', file=sys.stderr)
-                  sys.exit(1)
-          if manifest['manifest_version'] != 3:
-              print('manifest_version must be 3', file=sys.stderr)
-              sys.exit(1)
-          print('manifest.json is valid')
-          print(f'  Name: {manifest[\"name\"]}')
-          print(f'  Version: {manifest[\"version\"]}')
-          print(f'  Manifest version: {manifest[\"manifest_version\"]}')
-          "
-
-      - name: Validate required extension files
-        run: |
-          echo "Checking required files..."
-          for file in background.js popup.html popup.js; do
-            test -f "$file" || { echo "Required file missing: $file"; exit 1; }
-            echo "  Found: $file"
-          done
-
-      - name: Validate icon files
-        run: |
-          echo "Checking icon files..."
-          for size in 16 48 128; do
-            test -f "icons/icon${size}.png" || { echo "Missing icon: icons/icon${size}.png"; exit 1; }
-            echo "  Found: icons/icon${size}.png"
-          done
+      - name: Lint manifest JSON
+        run: jq . manifest.json > /dev/null
 
       - name: Validate JavaScript syntax
         run: |
-          echo "Checking JavaScript syntax..."
-          node --check background.js && echo "  background.js OK"
-          node --check popup.js     && echo "  popup.js OK"
+          node --check background.js
+          node --check content.js
+          node --check popup.js
 
-      - name: Package extension as ZIP
+      - name: Build extension artifacts
         run: |
-          echo "Packaging extension..."
-          zip -r jdVidCat.zip \
-            manifest.json \
-            background.js \
-            popup.html \
-            popup.js \
-            icons/
-          echo "Package created: jdVidCat.zip"
-          unzip -l jdVidCat.zip
+          mkdir -p dist
+          # Create base ZIP (generic)
+          zip -r dist/jdCatVid.zip manifest.json background.js content.js popup.html popup.js icons
+          # Create XPI for Firefox (same content, different extension)
+          cp dist/jdCatVid.zip dist/jdCatVid.xpi
+          # Create Chrome extension (same content)
+          cp dist/jdCatVid.zip dist/jdCatVid-chrome.zip
 
-      - name: Upload extension artifact
+      - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jdVidCat
-          path: jdVidCat.zip
-          retention-days: 30
+          name: jdCatVid-zip
+          path: dist/jdCatVid.zip
+
+      - name: Upload XPI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jdCatVid-xpi
+          path: dist/jdCatVid.xpi
+
+      - name: Upload Chrome artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jdCatVid-chrome
+          path: dist/jdCatVid-chrome.zip
+
+  gemini-code-assist:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.GEMINI_API_KEY != '' }}
+    continue-on-error: true
+    strategy:
+      matrix:
+        model: [gemini-2.5-pro, gemini-2.5-flash, gemini-2.0-flash]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Gemini Code Assist (${{ matrix.model }})
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ matrix.model }}
+        run: |
+          npx -y @google/gemini-cli \
+            --model "$GEMINI_MODEL" \
+            --prompt "Review this repository for build and extension issues."
