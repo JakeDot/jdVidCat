@@ -28,10 +28,28 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare Pages content
+        run: |
+          mkdir -p public
+          cat > public/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>jdVidCat</title>
+          </head>
+          <body>
+            <h1>jdVidCat</h1>
+            <p>GitHub Pages deployment is configured successfully.</p>
+          </body>
+          </html>
+          HTML
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: ./public
 
       - name: Deploy to GitHub Pages
         id: deployment
