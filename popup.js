@@ -106,10 +106,10 @@ function loadHistory() {
         item.appendChild(titleEl);
         item.appendChild(metaUrlEl);
         item.appendChild(metaTimeEl);
+        item.appendChild(linkEl);
         
         // Add fallback browser download link for non-blob URLs
         if (!entry.url.startsWith("blob:")) {
-          item.appendChild(linkEl);
           const browserLink = document.createElement("a");
           browserLink.href = entry.url;
           browserLink.className = "history-item-link";
@@ -117,8 +117,6 @@ function loadHistory() {
           browserLink.target = "_blank";
           browserLink.textContent = " | Browser Download";
           item.appendChild(browserLink);
-        } else {
-          item.appendChild(linkEl);
         }
         
         historyListNode.appendChild(item);
@@ -173,7 +171,7 @@ startButton.addEventListener("click", async () => {
         `${downloaded} videos`,
         `${crawledPages} pages`,
         `${discoveredVideos} links found`,
-        `${previewLinksFollowed || 0} preview links followed`
+        `${previewLinksFollowed} preview links followed`
       ];
       setStatus(`Downloaded ${details.join(", ")}.`);
     }

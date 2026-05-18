@@ -169,7 +169,7 @@ async function convertBlobToDataUrl(tabId, blobUrl) {
   return result?.result || { ok: false, error: "Blob conversion script did not return data" };
 }
 
-async function downloadUrl(url, index, useFallback = true) {
+async function downloadUrl(url, index) {
   const filename = filenameFromUrl(url, index);
   try {
     await chrome.downloads.download({
@@ -190,6 +190,7 @@ async function downloadUrl(url, index, useFallback = true) {
 
 async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MAX_DOWNLOADS }) {
   const max = Number.isFinite(maxDownloads) ? Math.max(1, Math.floor(maxDownloads)) : DEFAULT_MAX_DOWNLOADS;
+  const maxPreviewLinks = Math.floor(max * MAX_PREVIEW_LINKS_RATIO);
 
   const visitedPages = new Set();
   const queuedPages = [startUrl];
@@ -224,7 +225,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
 
       // Extract video preview links for traversal
       for (const previewUrl of extractVideoPreviewUrls(current, html, rootOrigin)) {
-        if (!visitedPages.has(previewUrl) && videoPreviewLinks.size < max * MAX_PREVIEW_LINKS_RATIO) {
+        if (!visitedPages.has(previewUrl) && videoPreviewLinks.size < maxPreviewLinks) {
           videoPreviewLinks.add(previewUrl);
           queuedPages.push(previewUrl);
         }
