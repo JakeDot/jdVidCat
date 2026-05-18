@@ -75,7 +75,7 @@ jobs:
     name: Bump Version and Create Tag
     runs-on: ubuntu-latest
     needs: validate-and-package
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.actor != 'github-actions[bot]'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
     steps:
@@ -86,6 +86,13 @@ jobs:
 
       - name: Bump version and create tag
         run: |
+          # Check if the last commit was made by github-actions[bot] to prevent infinite loops
+          LAST_COMMIT_AUTHOR=$(git log -1 --pretty=format:'%an')
+          if [ "$LAST_COMMIT_AUTHOR" = "github-actions[bot]" ]; then
+            echo "Last commit was made by github-actions[bot], skipping version bump"
+            exit 0
+          fi
+
           # Get current version from manifest.json
           CURRENT_VERSION=$(jq -r '.version' manifest.json) || {
             echo "Error: Failed to read version from manifest.json"
@@ -113,13 +120,18 @@ jobs:
             exit 0
           fi
 
-          # Update manifest.json with new version
-          jq ".version = \"$NEW_VERSION\"" manifest.json > manifest.json.bak || {
-            echo "Error: Failed to update manifest.json"
-            rm -f manifest.json.bak
+          # Update manifest.json with new version using mktemp for safety
+          TEMP_FILE=$(mktemp) || {
+            echo "Error: Failed to create temporary file"
             exit 1
           }
-          mv manifest.json.bak manifest.json || {
+          trap "rm -f $TEMP_FILE" EXIT
+
+          jq ".version = \"$NEW_VERSION\"" manifest.json > "$TEMP_FILE" || {
+            echo "Error: Failed to update manifest.json"
+            exit 1
+          }
+          mv "$TEMP_FILE" manifest.json || {
             echo "Error: Failed to replace manifest.json"
             exit 1
           }
@@ -137,13 +149,9 @@ jobs:
             exit 1
           }
 
-          # Push changes and tag separately with error handling
-          git push origin main || {
-            echo "Error: Failed to push main branch"
-            exit 1
-          }
-          git push origin "v$NEW_VERSION" || {
-            echo "Error: Failed to push tag"
+          # Push changes and tag together
+          git push origin main "v$NEW_VERSION" || {
+            echo "Error: Failed to push main branch and tag"
             exit 1
           }
 
