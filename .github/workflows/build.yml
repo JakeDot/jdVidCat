@@ -104,6 +104,12 @@ jobs:
           NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
           echo "New version: $NEW_VERSION"
 
+          # Check if tag already exists (prevents race condition failures)
+          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Tag v$NEW_VERSION already exists, skipping version bump"
+            exit 0
+          fi
+
           # Update manifest.json with new version
           jq ".version = \"$NEW_VERSION\"" manifest.json > manifest.json.tmp
           mv manifest.json.tmp manifest.json
