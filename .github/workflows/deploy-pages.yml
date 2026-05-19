@@ -83,11 +83,16 @@ jobs:
             echo "Contents of artifacts directory:"
             find artifacts -type f
             
-            # Copy all ZIP and XPI files
+            # Copy all ZIP and XPI files with validation
             find artifacts -type f \( -name "*.xpi" -o -name "*.zip" \) -print0 | while IFS= read -r -d '' file; do
-              basename=$(basename "$file")
-              cp "$file" "public/downloads/$basename"
-              echo "Copied: $basename"
+              filename=$(basename "$file")
+              # Validate filename contains only expected patterns (prevent path traversal)
+              if echo "$filename" | grep -qE '^jdCatVid[a-zA-Z0-9._-]*\.(xpi|zip)$'; then
+                cp "$file" "public/downloads/$filename"
+                echo "Copied: $filename"
+              else
+                echo "Skipped suspicious filename: $filename"
+              fi
             done
           fi
           
@@ -307,7 +312,7 @@ jobs:
                     <a href="./downloads/jdCatVid.zip" class="download-btn" download>Download ZIP</a>
                   </div>
                   <div id="no-artifacts" class="download-card" style="display: none;">
-                    <p style="color: #999; margin: 0;">Build artifacts are not currently available. Please check back later or clone the repository directly.</p>
+                    <p style="color: #999; margin: 0;">Build artifacts are being generated or are temporarily unavailable. This may happen if the latest build on main failed or is still in progress. Please refresh this page in a moment, or clone the repository directly from GitHub.</p>
                   </div>
                 </div>
               </div>
@@ -372,18 +377,22 @@ jobs:
                   generic: { card: 'generic-card', url: './downloads/jdCatVid.zip' }
                 };
                 
-                let anyFound = false;
-                for (const [key, artifact] of Object.entries(artifacts)) {
+                // Check all artifacts in parallel for better performance
+                const checks = Object.entries(artifacts).map(async ([key, artifact]) => {
                   try {
                     const response = await fetch(artifact.url, { method: 'HEAD' });
                     if (response.ok) {
                       document.getElementById(artifact.card).style.display = 'block';
-                      anyFound = true;
+                      return true;
                     }
                   } catch (e) {
                     // File not found, keep hidden
                   }
-                }
+                  return false;
+                });
+                
+                const results = await Promise.all(checks);
+                const anyFound = results.some(result => result);
                 
                 // Show or hide the "not available" message based on artifacts found
                 const noArtifactsEl = document.getElementById('no-artifacts');
