@@ -116,8 +116,8 @@ jobs:
             let existingCommentNode = null;
             let beforeCursor = null;
             const COMMENT_PAGE_SIZE = 20;
-            // Search backward through up to the 60 most recent comments (3 pages x 20)
-            // to balance deduplication reliability with API/query cost.
+            // Search the most recent comments first, then page backward through older ones
+            // (up to 60 total comments: 3 pages x 20) to balance reliability and API cost.
             const MAX_COMMENT_PAGES = 3;
 
             for (let i = 0; i < MAX_COMMENT_PAGES && !existingCommentNode; i++) {
@@ -159,7 +159,7 @@ jobs:
                 const hasRepository = Boolean(recentComments?.repository);
                 const hasPullRequest = Boolean(recentComments?.repository?.pullRequest);
                 throw new Error(
-                  `Failed to load PR comments for Gemini review request deduplication (page: ${i + 1}, nodes type: ${typeof commentNodes}, hasRepository: ${hasRepository}, hasPullRequest: ${hasPullRequest}).`
+                  `Failed to load PR comments for Gemini review request deduplication: expected commentNodes to be an array but received ${typeof commentNodes} (page: ${i + 1}, hasRepository: ${hasRepository}, hasPullRequest: ${hasPullRequest}).`
                 );
               }
 
