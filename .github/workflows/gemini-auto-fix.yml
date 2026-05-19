@@ -15,7 +15,9 @@ jobs:
     # Only run if comment is from gemini-code-assist on a PR
     if: |
       github.event.issue.pull_request &&
-      github.event.comment.user.login == 'gemini-code-assist'
+      github.event.comment.user.login == 'gemini-code-assist' &&
+      github.event.comment.user.type == 'Bot' &&
+      contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     steps:
       - name: Read PR metadata
         id: pr
@@ -60,6 +62,7 @@ jobs:
             let match;
             const fixes = [];
             let appliedCount = 0;
+            const allowedPathRegex = /^(manifest\.json|background\.js|content\.js|popup\.js|popup\.html|icons\/[A-Za-z0-9._-]+)$/;
 
             while ((match = codeBlockRegex.exec(comment)) !== null) {
               fixes.push(match[1].trim());
@@ -74,8 +77,27 @@ jobs:
             console.log(`Found ${fixes.length} actionable diff block(s)`);
 
             for (let i = 0; i < fixes.length; i++) {
+              const patchText = fixes[i];
+              const fileMatches = [...patchText.matchAll(/^[+-]{3}\s+[ab]\/([^\s]+)\s*$/gm)];
+              const files = fileMatches.map((m) => m[1]).filter((f) => f !== '/dev/null');
+
+              const hasUnsafePath = files.some((filePath) => {
+                const normalized = filePath.replace(/\\/g, '/');
+                return (
+                  normalized.includes('..') ||
+                  normalized.startsWith('.github/') ||
+                  normalized.startsWith('/') ||
+                  !allowedPathRegex.test(normalized)
+                );
+              });
+
+              if (files.length === 0 || hasUnsafePath) {
+                console.log(`Skipping unsafe diff block #${i + 1}`);
+                continue;
+              }
+
               const patchFile = `/tmp/gemini-suggestion-${i}.diff`;
-              fs.writeFileSync(patchFile, `${fixes[i]}\n`, 'utf8');
+              fs.writeFileSync(patchFile, `${patchText}\n`, 'utf8');
               try {
                 execSync(`git apply --whitespace=fix "${patchFile}"`, { stdio: 'pipe' });
                 appliedCount++;
