@@ -112,23 +112,42 @@ jobs:
               .slice(0, MAX_COMMENT_LENGTH);
             const body = `${GEMINI_REVIEW_MARKER}\n${message}`;
 
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100
-            });
-
-            const existingComment = comments.find((comment) =>
-              comment?.user?.type === 'Bot' &&
-              comment?.user?.login === 'github-actions[bot]' &&
-              typeof comment?.body === 'string' &&
-              comment.body.includes(GEMINI_REVIEW_MARKER)
+            const recentComments = await github.graphql(
+              `
+                query($owner: String!, $repo: String!, $issueNumber: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    issue(number: $issueNumber) {
+                      comments(last: 100) {
+                        nodes {
+                          id
+                          databaseId
+                          body
+                          author {
+                            login
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issueNumber: context.issue.number
+              }
             );
 
-            if (existingComment) {
+            const existingCommentNode = recentComments?.repository?.issue?.comments?.nodes?.find(
+              (comment) =>
+                comment?.author?.login === 'github-actions[bot]' &&
+                typeof comment?.body === 'string' &&
+                comment.body.includes(GEMINI_REVIEW_MARKER)
+            );
+
+            if (existingCommentNode) {
               await github.rest.issues.updateComment({
-                comment_id: existingComment.id,
+                comment_id: existingCommentNode.databaseId,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 body
