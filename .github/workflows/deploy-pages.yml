@@ -124,6 +124,7 @@ jobs:
           echo ""
           echo "Final contents of public/downloads:"
           ls -la public/downloads/ || true
+          cat > public/index.html << 'HTML'
           <!doctype html>
           <html lang="en">
           <head>
