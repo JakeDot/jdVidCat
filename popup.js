@@ -99,13 +99,25 @@ function loadHistory() {
         const linkEl = document.createElement("a");
         linkEl.href = jdLink;
         linkEl.className = "history-item-link";
-        linkEl.title = "Open in jDownloader";
+        linkEl.title = "Open in jDownloader (if not installed, use the Browser Download link below)";
+        linkEl.target = "_blank";
         linkEl.textContent = "Open in jDownloader";
         
         item.appendChild(titleEl);
         item.appendChild(metaUrlEl);
         item.appendChild(metaTimeEl);
         item.appendChild(linkEl);
+        
+        // Add fallback browser download link for non-blob URLs
+        if (!entry.url.startsWith("blob:")) {
+          const browserLink = document.createElement("a");
+          browserLink.href = entry.url;
+          browserLink.className = "history-item-link";
+          browserLink.title = "Browser download (fallback if jDownloader unavailable)";
+          browserLink.target = "_blank";
+          browserLink.textContent = "Browser Download";
+          item.appendChild(browserLink);
+        }
         
         historyListNode.appendChild(item);
       });
@@ -154,8 +166,9 @@ startButton.addEventListener("click", async () => {
         return;
       }
 
-      const { downloaded, crawledPages, discoveredVideos } = response.result;
-      setStatus(`Downloaded ${downloaded} videos (crawled ${crawledPages} pages, found ${discoveredVideos} links).`);
+      const { downloaded, crawledPages, discoveredVideos, previewLinksFollowed } = response.result;
+      const details = `${downloaded} video(s) from ${crawledPages} page(s) - ${discoveredVideos} links found, ${previewLinksFollowed} preview link(s) followed`;
+      setStatus(`Downloaded ${details}.`);
     }
   );
 });

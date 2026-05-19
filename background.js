@@ -1,6 +1,16 @@
 const DEFAULT_MAX_DOWNLOADS = 100;
 const VIDEO_EXTENSIONS = ["mp4", "m4v", "webm", "mov", "mkv", "avi", "m3u8"];
 const MAX_HISTORY_ENTRIES = 100;
+const MAX_PREVIEW_LINKS_RATIO = 0.2; // 20% of max downloads for preview links to prevent excessive crawling while still discovering content
+
+// Configuration for smart link traversal
+const PREVIEW_LINK_PATTERNS = [
+  /preview/i,
+  /thumbnail/i,
+  /thumb/i,
+  /poster/i,
+  /snapshot/i
+];
 
 function normalizeUrl(value) {
   if (!value) {
@@ -42,6 +52,32 @@ function extractVideoUrls(baseUrl, htmlText) {
   }
 
   return [...found];
+}
+
+function extractVideoPreviewUrls(baseUrl, htmlText, rootOrigin) {
+  const links = new Set();
+  const hrefPattern = /<a[^>]+href=["']([^"']+)["'][^>]*>/gi;
+
+  let match;
+  while ((match = hrefPattern.exec(htmlText)) !== null) {
+    const absolute = toAbsolute(baseUrl, match[1]);
+    if (!absolute) {
+      continue;
+    }
+
+    try {
+      const parsed = new URL(absolute);
+      const looksLikePreview = PREVIEW_LINK_PATTERNS.some((pattern) => pattern.test(absolute));
+
+      if (parsed.origin === rootOrigin && looksLikePreview) {
+        links.add(parsed.href);
+      }
+    } catch {
+      // ignore invalid links
+    }
+  }
+
+  return [...links];
 }
 
 function extractPaginationUrls(baseUrl, htmlText, rootOrigin) {
@@ -125,21 +161,32 @@ async function convertBlobToDataUrl(tabId, blobUrl) {
 
 async function downloadUrl(url, index) {
   const filename = filenameFromUrl(url, index);
-  await chrome.downloads.download({
-    url,
-    filename,
-    saveAs: false,
-    conflictAction: "uniquify"
-  });
-  await addDownloadToHistory(url, filename);
+  try {
+    await chrome.downloads.download({
+      url,
+      filename,
+      saveAs: false,
+      conflictAction: "uniquify"
+    });
+    await addDownloadToHistory(url, filename);
+  } catch (error) {
+    // Log error for debugging - failed downloads are not added to history
+    console.warn("Download attempt failed for:", url, "Error:", error);
+    // Users can manually retry failed downloads by copying the URL to the browser address bar
+  }
 }
 
 async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MAX_DOWNLOADS }) {
   const max = Number.isFinite(maxDownloads) ? Math.max(1, Math.floor(maxDownloads)) : DEFAULT_MAX_DOWNLOADS;
+  const maxPreviewLinks = Math.floor(max * MAX_PREVIEW_LINKS_RATIO);
 
   const visitedPages = new Set();
+  const queuedUrls = new Set([startUrl]); // Track queued URLs to prevent duplicates
   const queuedPages = [startUrl];
   const videos = new Set();
+  // Tracks preview links for status reporting and deduplication; persists throughout crawl
+  // (unlike queuedUrls which removes URLs when pages are visited)
+  const videoPreviewLinks = new Set();
 
   const rootOrigin = new URL(startUrl).origin;
 
@@ -150,6 +197,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
     }
 
     visitedPages.add(current);
+    queuedUrls.delete(current);
 
     try {
       const response = await fetch(current, { credentials: "include" });
@@ -158,6 +206,8 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
       }
 
       const html = await response.text();
+      
+      // Extract video URLs directly from the page
       for (const videoUrl of extractVideoUrls(current, html)) {
         if (videos.size >= max) {
           break;
@@ -165,8 +215,19 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
         videos.add(videoUrl);
       }
 
+      // Extract video preview links for traversal
+      for (const previewUrl of extractVideoPreviewUrls(current, html, rootOrigin)) {
+        if (!videoPreviewLinks.has(previewUrl) && videoPreviewLinks.size < maxPreviewLinks) {
+          videoPreviewLinks.add(previewUrl);
+          queuedUrls.add(previewUrl);
+          queuedPages.push(previewUrl);
+        }
+      }
+
+      // Extract pagination links
       for (const pageUrl of extractPaginationUrls(current, html, rootOrigin)) {
-        if (!visitedPages.has(pageUrl)) {
+        if (!visitedPages.has(pageUrl) && !queuedUrls.has(pageUrl)) {
+          queuedUrls.add(pageUrl);
           queuedPages.push(pageUrl);
         }
       }
@@ -207,7 +268,8 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
   return {
     downloaded,
     crawledPages: visitedPages.size,
-    discoveredVideos: videos.size
+    discoveredVideos: videos.size,
+    previewLinksFollowed: videoPreviewLinks.size
   };
 }
 
@@ -246,9 +308,30 @@ async function clearDownloadHistory() {
   await chrome.storage.local.set({ downloadHistory: [] });
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.set({ maxDownloads: DEFAULT_MAX_DOWNLOADS });
-  chrome.storage.local.set({ downloadHistory: [] });
+async function ensureContextMenuExists() {
+  try {
+    // Remove all existing context menus to avoid duplicate ID errors
+    await chrome.contextMenus.removeAll();
+    // Create fresh context menu item
+    chrome.contextMenus.create({
+      id: "jdcatvid-download",
+      title: "jdCatVid: Download videos from this page",
+      contexts: ["page"]
+    });
+  } catch (error) {
+    console.error("Failed to create context menu:", error);
+  }
+}
+
+chrome.runtime.onInstalled.addListener(async (details) => {
+  // Initialize storage on install only, not on every update
+  if (details.reason === "install") {
+    await chrome.storage.sync.set({ maxDownloads: DEFAULT_MAX_DOWNLOADS });
+    await chrome.storage.local.set({ downloadHistory: [] });
+  }
+  
+  // Ensure context menu exists on both install and update
+  await ensureContextMenuExists();
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -282,4 +365,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   })();
 
   return true;
+});
+
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (!tab?.id || !tab?.url) {
+    console.error("Context menu action failed: tab information unavailable");
+    return;
+  }
+
+  if (info.menuItemId === "jdcatvid-download") {
+    // Use saved max downloads setting
+    const { maxDownloads = DEFAULT_MAX_DOWNLOADS } = await chrome.storage.sync.get("maxDownloads");
+    try {
+      await startDownloadFromTab({
+        tabId: tab.id,
+        startUrl: tab.url,
+        maxDownloads
+      });
+    } catch (error) {
+      console.error("Download failed:", error);
+    }
+  }
 });
