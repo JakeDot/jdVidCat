@@ -93,6 +93,7 @@ jobs:
         with:
           script: |
             const GEMINI_REVIEW_MARKER = '<!-- jdcatvid:gemini-review-request -->';
+            const GITHUB_ACTIONS_BOT_LOGIN = 'github-actions[bot]';
             const DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE = [
               '@gemini-code-assist please review this pull request.',
               '',
@@ -116,7 +117,7 @@ jobs:
             let beforeCursor = null;
             const COMMENT_PAGE_SIZE = 20;
             // Search backward through up to the 60 most recent comments (3 pages x 20)
-            // to balance dedupe reliability with API/query cost.
+            // to balance deduplication reliability with API/query cost.
             const MAX_COMMENT_PAGES = 3;
 
             for (let i = 0; i < MAX_COMMENT_PAGES && !existingCommentNode; i++) {
@@ -164,7 +165,7 @@ jobs:
 
               existingCommentNode = commentNodes.find(
                 (comment) =>
-                  comment?.author?.login === 'github-actions[bot]' &&
+                  comment?.author?.login === GITHUB_ACTIONS_BOT_LOGIN &&
                   comment?.body?.includes(GEMINI_REVIEW_MARKER)
               );
 
