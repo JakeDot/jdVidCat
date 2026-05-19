@@ -112,43 +112,64 @@ jobs:
               .slice(0, MAX_COMMENT_LENGTH);
             const body = `${GEMINI_REVIEW_MARKER}\n${message}`;
 
-            const recentComments = await github.graphql(
-              `
-                query($owner: String!, $repo: String!, $issueNumber: Int!) {
-                  repository(owner: $owner, name: $repo) {
-                    pullRequest(number: $issueNumber) {
-                      comments(last: 30) {
-                        nodes {
-                          id
-                          databaseId
-                          body
-                          author {
-                            login
+            let existingCommentNode = null;
+            let beforeCursor = null;
+            const COMMENT_PAGE_SIZE = 20;
+            const MAX_COMMENT_PAGES = 3;
+
+            for (let i = 0; i < MAX_COMMENT_PAGES && !existingCommentNode; i += 1) {
+              const recentComments = await github.graphql(
+                `
+                  query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String) {
+                    repository(owner: $owner, name: $repo) {
+                      pullRequest(number: $issueNumber) {
+                        comments(last: ${COMMENT_PAGE_SIZE}, before: $before) {
+                          nodes {
+                            id
+                            databaseId
+                            body
+                            author {
+                              login
+                            }
+                          }
+                          pageInfo {
+                            hasPreviousPage
+                            startCursor
                           }
                         }
                       }
                     }
                   }
+                `,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issueNumber: context.issue.number,
+                  before: beforeCursor
                 }
-              `,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issueNumber: context.issue.number
+              );
+
+              const commentsConnection = recentComments?.repository?.pullRequest?.comments;
+              const commentNodes = commentsConnection?.nodes;
+              if (!Array.isArray(commentNodes)) {
+                throw new Error(
+                  `Failed to load PR comments for Gemini review request deduplication: ${JSON.stringify(commentsConnection)}`
+                );
               }
-            );
 
-            const commentNodes = recentComments?.repository?.pullRequest?.comments?.nodes;
-            if (!Array.isArray(commentNodes)) {
-              throw new Error('Failed to load pull request comments for Gemini review request deduplication.');
+              existingCommentNode = commentNodes.find(
+                (comment) =>
+                  comment?.author?.login === 'github-actions[bot]' &&
+                  typeof comment?.body === 'string' &&
+                  comment.body.includes(GEMINI_REVIEW_MARKER)
+              );
+
+              if (existingCommentNode || !commentsConnection?.pageInfo?.hasPreviousPage) {
+                break;
+              }
+
+              beforeCursor = commentsConnection.pageInfo.startCursor;
             }
-
-            const existingCommentNode = commentNodes.find(
-              (comment) =>
-                comment?.author?.login === 'github-actions[bot]' &&
-                typeof comment?.body === 'string' &&
-                comment.body.includes(GEMINI_REVIEW_MARKER)
-            );
 
             if (existingCommentNode) {
               await github.rest.issues.updateComment({
