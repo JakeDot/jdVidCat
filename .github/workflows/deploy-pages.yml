@@ -41,13 +41,16 @@ jobs:
           
           # Download artifacts from the latest build workflow run
           # Use GitHub API to find the latest successful build run for this branch/commit
-          WORKFLOW_ID=$(gh workflow list --json name,id -q '.[] | select(.name == "Build Extension") | .id' | head -1)
+          WORKFLOW_IDS=$(gh workflow list --json name,id -q '.[] | select(.name == "Build Extension") | .id')
           
-          if [ -z "$WORKFLOW_ID" ]; then
+          if [ -z "$WORKFLOW_IDS" ]; then
             echo "warning=true" >> "$GITHUB_OUTPUT"
             echo "::warning::Could not find Build Extension workflow"
             exit 0
           fi
+          
+          # Get the workflow ID (should be only one)
+          WORKFLOW_ID=$(echo "$WORKFLOW_IDS" | head -1)
           
           # Get the latest successful run on the current ref
           RUN_ID=$(gh run list --workflow="$WORKFLOW_ID" --branch="${GITHUB_REF#refs/heads/}" --status=success --json databaseId -q '.[0].databaseId')
@@ -77,13 +80,47 @@ jobs:
           set -e
           mkdir -p public/downloads
           
-          # Copy artifacts to public/downloads if they exist
+          # Copy all artifacts to public/downloads if they exist
           if [ -d artifacts ]; then
-            find artifacts -type f \( -name "*.xpi" -o -name "*-chrome.zip" \) -exec cp {} public/downloads/ \;
+            echo "Contents of artifacts directory:"
+            find artifacts -type f
+            
+            # Copy all ZIP and XPI files
+            find artifacts -type f \( -name "*.xpi" -o -name "*.zip" \) -print0 | while IFS= read -r -d '' file; do
+              basename=$(basename "$file")
+              cp "$file" "public/downloads/$basename"
+              echo "Copied: $basename"
+            done
           fi
           
-          # Generate the information page with download links
-          cat > public/index.html <<'HTML'
+          # Validate that required artifacts were copied
+          XPI_EXISTS=false
+          CHROME_EXISTS=false
+          GENERIC_EXISTS=false
+          
+          if [ -f public/downloads/jdCatVid.xpi ]; then
+            XPI_EXISTS=true
+            echo "✓ Found jdCatVid.xpi"
+          fi
+          
+          if [ -f public/downloads/jdCatVid-chrome.zip ]; then
+            CHROME_EXISTS=true
+            echo "✓ Found jdCatVid-chrome.zip"
+          fi
+          
+          if [ -f public/downloads/jdCatVid.zip ]; then
+            GENERIC_EXISTS=true
+            echo "✓ Found jdCatVid.zip"
+          fi
+          
+          # Store artifact availability for use in HTML
+          echo "XPI_EXISTS=$XPI_EXISTS" >> "$GITHUB_ENV"
+          echo "CHROME_EXISTS=$CHROME_EXISTS" >> "$GITHUB_ENV"
+          echo "GENERIC_EXISTS=$GENERIC_EXISTS" >> "$GITHUB_ENV"
+          
+          echo ""
+          echo "Final contents of public/downloads:"
+          ls -la public/downloads/ || true
           <!doctype html>
           <html lang="en">
           <head>
@@ -256,20 +293,23 @@ jobs:
               <div class="section">
                 <h2>Download Extension</h2>
                 <div class="downloads">
-                  <div class="download-card">
+                  <div class="download-card" id="firefox-card" style="display: none;">
                     <h3>Firefox</h3>
                     <p>For Mozilla Firefox</p>
                     <a href="./downloads/jdCatVid.xpi" class="download-btn" download>Download XPI</a>
                   </div>
-                  <div class="download-card">
+                  <div class="download-card" id="chrome-card" style="display: none;">
                     <h3>Chrome/Chromium</h3>
                     <p>For Chrome, Edge, Brave, and other Chromium-based browsers</p>
                     <a href="./downloads/jdCatVid-chrome.zip" class="download-btn" download>Download ZIP</a>
                   </div>
-                  <div class="download-card">
+                  <div class="download-card" id="generic-card" style="display: none;">
                     <h3>Generic</h3>
                     <p>Generic package for any browser</p>
                     <a href="./downloads/jdCatVid.zip" class="download-btn" download>Download ZIP</a>
+                  </div>
+                  <div id="no-artifacts" class="download-card">
+                    <p style="color: #999; margin: 0;">Build artifacts are not currently available. Please check back later or clone the repository directly.</p>
                   </div>
                 </div>
               </div>
@@ -301,10 +341,10 @@ jobs:
               
               <div class="section">
                 <h2>Official Distribution Channels</h2>
-                <p style="margin-bottom: 15px;">For official installations, visit:</p>
+                <p style="margin-bottom: 15px;">For official installations when available, visit:</p>
                 <div class="browser-links">
-                  <a href="https://addons.mozilla.org/" class="browser-link">Firefox Add-ons</a>
-                  <a href="https://chromewebstore.google.com/" class="browser-link">Chrome Web Store</a>
+                  <a href="https://addons.mozilla.org/en-US/firefox/" class="browser-link">Firefox Add-ons</a>
+                  <a href="https://chrome.google.com/webstore" class="browser-link">Chrome Web Store</a>
                 </div>
               </div>
               
@@ -325,6 +365,36 @@ jobs:
                 month: 'long',
                 day: 'numeric'
               });
+              
+              // Dynamically check which artifacts are available and show/hide cards
+              async function checkArtifacts() {
+                const artifacts = {
+                  firefox: { card: 'firefox-card', url: './downloads/jdCatVid.xpi' },
+                  chrome: { card: 'chrome-card', url: './downloads/jdCatVid-chrome.zip' },
+                  generic: { card: 'generic-card', url: './downloads/jdCatVid.zip' }
+                };
+                
+                let anyFound = false;
+                for (const [key, artifact] of Object.entries(artifacts)) {
+                  try {
+                    const response = await fetch(artifact.url, { method: 'HEAD' });
+                    if (response.ok) {
+                      document.getElementById(artifact.card).style.display = 'block';
+                      anyFound = true;
+                    }
+                  } catch (e) {
+                    // File not found, keep hidden
+                  }
+                }
+                
+                // If no artifacts found, show the "not available" message
+                if (!anyFound) {
+                  document.getElementById('no-artifacts').style.display = 'block';
+                }
+              }
+              
+              // Check artifacts when page loads
+              document.addEventListener('DOMContentLoaded', checkArtifacts);
             </script>
           </body>
           </html>
