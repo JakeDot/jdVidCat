@@ -84,9 +84,23 @@ jobs:
     steps:
       - name: Post Gemini code review request
         uses: actions/github-script@v7
+        env:
+          GEMINI_REVIEW_REQUEST_MESSAGE: ${{ vars.GEMINI_REVIEW_REQUEST_MESSAGE }}
         with:
           script: |
-            const message = '@gemini-code-assist please do a code review of this PR';
+            const DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE = [
+              '@gemini-code-assist please review this pull request.',
+              '',
+              'Focus areas:',
+              '- Correctness and regressions',
+              '- Edge cases and error handling',
+              '- Security risks and dependency/workflow safety',
+              '- Readability and maintainability',
+              '',
+              'If possible, suggest actionable diff-style fixes.'
+            ].join('\n');
+            const configuredMessage = process.env.GEMINI_REVIEW_REQUEST_MESSAGE?.trim();
+            const message = configuredMessage || DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
