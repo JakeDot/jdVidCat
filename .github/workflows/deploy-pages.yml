@@ -36,7 +36,6 @@ jobs:
       - name: Download build artifacts
         id: download_artifacts
         run: |
-          set -e
           mkdir -p artifacts
           
           # Download artifacts from the latest build workflow run
@@ -77,7 +76,6 @@ jobs:
 
       - name: Prepare Pages content with download links
         run: |
-          set -e
           mkdir -p public/downloads
           
           # Copy all artifacts to public/downloads if they exist
@@ -359,7 +357,7 @@ jobs:
             </div>
             
             <script>
-              // Display the current date
+              // Display the current date in localized format (e.g., "January 1, 2024")
               document.getElementById('timestamp').textContent = new Date().toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
