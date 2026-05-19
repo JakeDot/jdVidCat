@@ -168,12 +168,12 @@ async function downloadUrl(url, index) {
       saveAs: false,
       conflictAction: "uniquify"
     });
+    await addDownloadToHistory(url, filename);
   } catch (error) {
-    // Log error for debugging - download failures are recorded in history with fallback link
+    // Log error for debugging - failed downloads are not added to history
     console.warn("Download attempt failed for:", url, "Error:", error);
-    // Users can recover using the Browser Download fallback link in the history tab
+    // Users can still use the Browser Download fallback link if they manually add the URL to history
   }
-  await addDownloadToHistory(url, filename);
 }
 
 async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MAX_DOWNLOADS }) {
@@ -181,6 +181,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
   const maxPreviewLinks = Math.floor(max * MAX_PREVIEW_LINKS_RATIO);
 
   const visitedPages = new Set();
+  const queuedUrls = new Set([startUrl]); // Track queued URLs to prevent duplicates
   const queuedPages = [startUrl];
   const videos = new Set();
   const videoPreviewLinks = new Set();
@@ -194,6 +195,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
     }
 
     visitedPages.add(current);
+    queuedUrls.delete(current);
 
     try {
       const response = await fetch(current, { credentials: "include" });
@@ -213,16 +215,17 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
 
       // Extract video preview links for traversal
       for (const previewUrl of extractVideoPreviewUrls(current, html, rootOrigin)) {
-        if (!visitedPages.has(previewUrl) && videoPreviewLinks.size < maxPreviewLinks) {
+        if (!visitedPages.has(previewUrl) && !queuedUrls.has(previewUrl) && videoPreviewLinks.size < maxPreviewLinks) {
           videoPreviewLinks.add(previewUrl);
-          visitedPages.add(previewUrl);
+          queuedUrls.add(previewUrl);
           queuedPages.push(previewUrl);
         }
       }
 
       // Extract pagination links
       for (const pageUrl of extractPaginationUrls(current, html, rootOrigin)) {
-        if (!visitedPages.has(pageUrl)) {
+        if (!visitedPages.has(pageUrl) && !queuedUrls.has(pageUrl)) {
+          queuedUrls.add(pageUrl);
           queuedPages.push(pageUrl);
         }
       }
@@ -303,16 +306,30 @@ async function clearDownloadHistory() {
   await chrome.storage.local.set({ downloadHistory: [] });
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.set({ maxDownloads: DEFAULT_MAX_DOWNLOADS });
-  chrome.storage.local.set({ downloadHistory: [] });
+async function ensureContextMenuExists() {
+  try {
+    // Remove all existing context menus to avoid duplicate ID errors
+    await chrome.contextMenus.removeAll();
+    // Create fresh context menu item
+    chrome.contextMenus.create({
+      id: "jdcatvid-download",
+      title: "jdCatVid: Download videos from this page",
+      contexts: ["page"]
+    });
+  } catch (error) {
+    console.error("Failed to create context menu:", error);
+  }
+}
+
+chrome.runtime.onInstalled.addListener((details) => {
+  // Initialize storage on install only, not on every update
+  if (details.reason === "install") {
+    chrome.storage.sync.set({ maxDownloads: DEFAULT_MAX_DOWNLOADS });
+    chrome.storage.local.set({ downloadHistory: [] });
+  }
   
-  // Create context menu item
-  chrome.contextMenus.create({
-    id: "jdcatvid-download",
-    title: "jdCatVid: Download videos from this page",
-    contexts: ["page"]
-  });
+  // Ensure context menu exists on both install and update
+  ensureContextMenuExists();
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
