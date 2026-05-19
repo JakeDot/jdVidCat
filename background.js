@@ -181,10 +181,11 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
   const maxPreviewLinks = Math.floor(max * MAX_PREVIEW_LINKS_RATIO);
 
   const visitedPages = new Set();
-  const queuedUrls = new Set([startUrl]); // Track queued URLs to prevent duplicates
+  const queuedUrls = new Set(); // Track queued URLs to prevent duplicates
   const queuedPages = [startUrl];
+  queuedUrls.add(startUrl);
   const videos = new Set();
-  const videoPreviewLinks = new Set();
+  const videoPreviewLinks = new Set(); // Tracks preview links for status reporting; persists throughout crawl
 
   const rootOrigin = new URL(startUrl).origin;
 
@@ -216,7 +217,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
       // Extract video preview links for traversal
       for (const previewUrl of extractVideoPreviewUrls(current, html, rootOrigin)) {
         if (!visitedPages.has(previewUrl) && !queuedUrls.has(previewUrl) && videoPreviewLinks.size < maxPreviewLinks) {
-          videoPreviewLinks.add(previewUrl); // Track for status reporting (persists throughout crawl)
+          videoPreviewLinks.add(previewUrl); // Track for status reporting
           queuedUrls.add(previewUrl);
           queuedPages.push(previewUrl);
         }
