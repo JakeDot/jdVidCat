@@ -99,8 +99,10 @@ jobs:
               '',
               'If possible, suggest actionable diff-style fixes.'
             ].join('\n');
-            const configuredMessage = process.env.GEMINI_REVIEW_REQUEST_MESSAGE?.trim();
-            const message = configuredMessage || DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE;
+            const configuredMessage = (process.env.GEMINI_REVIEW_REQUEST_MESSAGE || '')
+              .replace(/\u0000/g, '')
+              .trim();
+            const message = (configuredMessage || DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE).slice(0, 4000);
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
