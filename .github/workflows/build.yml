@@ -99,10 +99,12 @@ jobs:
               '',
               'If possible, suggest actionable diff-style fixes.'
             ].join('\n');
+            const MAX_COMMENT_LENGTH = 4000;
             const configuredMessage = (process.env.GEMINI_REVIEW_REQUEST_MESSAGE || '')
-              .replace(/\u0000/g, '')
+              .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
               .trim();
-            const message = (configuredMessage || DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE).slice(0, 4000);
+            const message = (configuredMessage || DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE)
+              .slice(0, MAX_COMMENT_LENGTH);
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
