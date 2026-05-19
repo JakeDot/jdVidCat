@@ -185,7 +185,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
   const queuedPages = [startUrl];
   const videos = new Set();
   // Tracks preview links for status reporting and deduplication; persists throughout crawl
-  // (unlike queuedUrls which removes URLs as they are processed)
+  // (unlike queuedUrls which removes URLs when pages are visited)
   const videoPreviewLinks = new Set();
 
   const rootOrigin = new URL(startUrl).origin;
@@ -218,7 +218,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
       // Extract video preview links for traversal
       for (const previewUrl of extractVideoPreviewUrls(current, html, rootOrigin)) {
         if (!videoPreviewLinks.has(previewUrl) && videoPreviewLinks.size < maxPreviewLinks) {
-          videoPreviewLinks.add(previewUrl); // Track for deduplication and status reporting
+          videoPreviewLinks.add(previewUrl);
           queuedUrls.add(previewUrl);
           queuedPages.push(previewUrl);
         }
@@ -323,15 +323,15 @@ async function ensureContextMenuExists() {
   }
 }
 
-chrome.runtime.onInstalled.addListener((details) => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   // Initialize storage on install only, not on every update
   if (details.reason === "install") {
-    chrome.storage.sync.set({ maxDownloads: DEFAULT_MAX_DOWNLOADS });
-    chrome.storage.local.set({ downloadHistory: [] });
+    await chrome.storage.sync.set({ maxDownloads: DEFAULT_MAX_DOWNLOADS });
+    await chrome.storage.local.set({ downloadHistory: [] });
   }
   
   // Ensure context menu exists on both install and update
-  ensureContextMenuExists();
+  await ensureContextMenuExists();
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
