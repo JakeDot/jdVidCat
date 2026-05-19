@@ -117,13 +117,13 @@ jobs:
             const COMMENT_PAGE_SIZE = 20;
             const MAX_COMMENT_PAGES = 3;
 
-            for (let i = 0; i < MAX_COMMENT_PAGES && !existingCommentNode; i += 1) {
+            for (let i = 0; i < MAX_COMMENT_PAGES && !existingCommentNode; i++) {
               const recentComments = await github.graphql(
                 `
-                  query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String) {
+                  query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String, $pageSize: Int!) {
                     repository(owner: $owner, name: $repo) {
                       pullRequest(number: $issueNumber) {
-                        comments(last: ${COMMENT_PAGE_SIZE}, before: $before) {
+                        comments(last: $pageSize, before: $before) {
                           nodes {
                             id
                             databaseId
@@ -145,7 +145,8 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issueNumber: context.issue.number,
-                  before: beforeCursor
+                  before: beforeCursor,
+                  pageSize: COMMENT_PAGE_SIZE
                 }
               );
 
@@ -153,7 +154,7 @@ jobs:
               const commentNodes = commentsConnection?.nodes;
               if (!Array.isArray(commentNodes)) {
                 throw new Error(
-                  `Failed to load PR comments for Gemini review request deduplication: ${JSON.stringify(commentsConnection)}`
+                  `Failed to load PR comments for Gemini review request deduplication (received type: ${typeof commentsConnection}).`
                 );
               }
 
