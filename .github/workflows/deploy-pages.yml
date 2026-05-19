@@ -4,11 +4,16 @@ on:
   push:
     branches: ["main"]
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Build Extension"]
+    types: [completed]
+    branches: ["main"]
 
 permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read
 
 concurrency:
   group: github-pages-${{ github.ref }}
@@ -28,25 +33,383 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Prepare Pages content
+      - name: Download build artifacts
+        id: download_artifacts
         run: |
-          set -e
-          mkdir -p public
-          cat > public/index.html <<'HTML'
+          mkdir -p artifacts
+          
+          # Download artifacts from the latest build workflow run
+          # Use GitHub API to find the latest successful build run for this branch/commit
+          WORKFLOW_IDS=$(gh workflow list --json name,id -q '.[] | select(.name == "Build Extension") | .id')
+          
+          if [ -z "$WORKFLOW_IDS" ]; then
+            echo "warning=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not find Build Extension workflow"
+            exit 0
+          fi
+          
+          # Get the workflow ID (should be only one)
+          WORKFLOW_ID=$(echo "$WORKFLOW_IDS" | head -1)
+          
+          # Get the latest successful run on the current ref
+          RUN_ID=$(gh run list --workflow="$WORKFLOW_ID" --branch="${GITHUB_REF#refs/heads/}" --status=success --json databaseId -q '.[0].databaseId')
+          
+          if [ -z "$RUN_ID" ]; then
+            echo "warning=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::No successful build runs found for this branch"
+            exit 0
+          fi
+          
+          echo "RUN_ID=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Found build run: $RUN_ID"
+          
+          # Download all artifacts from that run
+          gh run download "$RUN_ID" -D artifacts || {
+            echo "warning=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Failed to download artifacts from build run"
+            exit 0
+          }
+          
+          echo "Artifacts downloaded successfully"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare Pages content with download links
+        run: |
+          mkdir -p public/downloads
+          
+          # Copy all artifacts to public/downloads if they exist
+          if [ -d artifacts ]; then
+            echo "Contents of artifacts directory:"
+            find artifacts -type f
+            
+            # Copy all ZIP and XPI files with validation
+            find artifacts -type f \( -name "*.xpi" -o -name "*.zip" \) -print0 | while IFS= read -r -d '' file; do
+              filename=$(basename "$file")
+              # Validate filename contains only expected patterns (prevent path traversal)
+              if echo "$filename" | grep -qE '^jdCatVid[a-zA-Z0-9._-]*\.(xpi|zip)$'; then
+                cp "$file" "public/downloads/$filename"
+                echo "Copied: $filename"
+              else
+                echo "Skipped suspicious filename: $filename"
+              fi
+            done
+          fi
+          
+          # Validate that required artifacts were copied
+          XPI_EXISTS=false
+          CHROME_EXISTS=false
+          GENERIC_EXISTS=false
+          
+          if [ -f public/downloads/jdCatVid.xpi ]; then
+            XPI_EXISTS=true
+            echo "✓ Found jdCatVid.xpi"
+          fi
+          
+          if [ -f public/downloads/jdCatVid-chrome.zip ]; then
+            CHROME_EXISTS=true
+            echo "✓ Found jdCatVid-chrome.zip"
+          fi
+          
+          if [ -f public/downloads/jdCatVid.zip ]; then
+            GENERIC_EXISTS=true
+            echo "✓ Found jdCatVid.zip"
+          fi
+          
+          # Store artifact availability for use in HTML
+          echo "XPI_EXISTS=$XPI_EXISTS" >> "$GITHUB_ENV"
+          echo "CHROME_EXISTS=$CHROME_EXISTS" >> "$GITHUB_ENV"
+          echo "GENERIC_EXISTS=$GENERIC_EXISTS" >> "$GITHUB_ENV"
+          
+          echo ""
+          echo "Final contents of public/downloads:"
+          ls -la public/downloads/ || true
           <!doctype html>
           <html lang="en">
           <head>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>jdVidCat</title>
+            <title>jdVidCat - Video Category Downloader</title>
+            <style>
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 20px;
+              }
+              .container {
+                max-width: 800px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                padding: 40px;
+              }
+              h1 {
+                color: #667eea;
+                margin-bottom: 10px;
+                font-size: 2.5em;
+              }
+              .subtitle {
+                color: #666;
+                margin-bottom: 30px;
+                font-size: 1.1em;
+              }
+              .section {
+                margin: 30px 0;
+              }
+              .section h2 {
+                color: #764ba2;
+                margin-bottom: 15px;
+                font-size: 1.5em;
+                border-bottom: 2px solid #667eea;
+                padding-bottom: 10px;
+              }
+              .features {
+                list-style: none;
+                padding: 0;
+              }
+              .features li {
+                padding: 10px 0;
+                padding-left: 25px;
+                position: relative;
+              }
+              .features li:before {
+                content: "✓";
+                position: absolute;
+                left: 0;
+                color: #667eea;
+                font-weight: bold;
+              }
+              .downloads {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 20px;
+                margin-top: 20px;
+              }
+              .download-card {
+                background: #f8f9fa;
+                border: 2px solid #667eea;
+                border-radius: 8px;
+                padding: 20px;
+                text-align: center;
+                transition: all 0.3s ease;
+              }
+              .download-card:hover {
+                border-color: #764ba2;
+                box-shadow: 0 8px 16px rgba(102, 126, 234, 0.2);
+                transform: translateY(-2px);
+              }
+              .download-card h3 {
+                color: #667eea;
+                margin-bottom: 10px;
+              }
+              .download-card p {
+                color: #666;
+                margin-bottom: 15px;
+                font-size: 0.9em;
+              }
+              .download-btn {
+                display: inline-block;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                text-decoration: none;
+                transition: all 0.3s ease;
+                border: none;
+                cursor: pointer;
+                font-size: 1em;
+              }
+              .download-btn:hover {
+                transform: scale(1.05);
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+              }
+              .browser-links {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+                margin-top: 20px;
+              }
+              .browser-link {
+                display: inline-block;
+                background: white;
+                border: 2px solid #667eea;
+                color: #667eea;
+                padding: 10px 20px;
+                border-radius: 6px;
+                text-decoration: none;
+                transition: all 0.3s ease;
+                text-align: center;
+              }
+              .browser-link:hover {
+                background: #667eea;
+                color: white;
+              }
+              .info-box {
+                background: #e8f4f8;
+                border-left: 4px solid #667eea;
+                padding: 15px;
+                margin: 20px 0;
+                border-radius: 4px;
+              }
+              .footer {
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 1px solid #eee;
+                text-align: center;
+                color: #999;
+                font-size: 0.9em;
+              }
+            </style>
           </head>
           <body>
-            <h1>jdVidCat</h1>
-            <p>GitHub Pages deployment is configured successfully.</p>
+            <div class="container">
+              <h1>jdVidCat</h1>
+              <p class="subtitle">Browser Extension for Video Category Downloading</p>
+              
+              <div class="section">
+                <h2>About</h2>
+                <p>jdVidCat is a powerful browser extension that helps you download videos from category and tag pages. Starting from the current tab URL, it crawls pages with pagination and automatically detects video URLs for batch downloading.</p>
+              </div>
+              
+              <div class="section">
+                <h2>Features</h2>
+                <ul class="features">
+                  <li>Starts from the current tab URL</li>
+                  <li>Crawls category/tag pages with pagination</li>
+                  <li>Auto-detects likely video URLs</li>
+                  <li>Captures JavaScript-created blob video URLs</li>
+                  <li>Default download limit of 100 videos</li>
+                  <li>Cross-browser support (Firefox, Chrome, and Chromium-based browsers)</li>
+                  <li>Download history tracking</li>
+                </ul>
+              </div>
+              
+              <div class="section">
+                <h2>Download Extension</h2>
+                <div class="downloads">
+                  <div class="download-card" id="firefox-card" style="display: none;">
+                    <h3>Firefox</h3>
+                    <p>For Mozilla Firefox</p>
+                    <a href="./downloads/jdCatVid.xpi" class="download-btn" download>Download XPI</a>
+                  </div>
+                  <div class="download-card" id="chrome-card" style="display: none;">
+                    <h3>Chrome/Chromium</h3>
+                    <p>For Chrome, Edge, Brave, and other Chromium-based browsers</p>
+                    <a href="./downloads/jdCatVid-chrome.zip" class="download-btn" download>Download ZIP</a>
+                  </div>
+                  <div class="download-card" id="generic-card" style="display: none;">
+                    <h3>Generic</h3>
+                    <p>Generic package for any browser</p>
+                    <a href="./downloads/jdCatVid.zip" class="download-btn" download>Download ZIP</a>
+                  </div>
+                  <div id="no-artifacts" class="download-card" style="display: none;">
+                    <p style="color: #999; margin: 0;">Build artifacts are being generated or are temporarily unavailable. This may happen if the latest build on main failed or is still in progress. Please refresh this page in a moment, or clone the repository directly from GitHub.</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="section">
+                <h2>Installation</h2>
+                
+                <h3 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">Firefox</h3>
+                <div class="info-box">
+                  <ol style="margin-left: 20px;">
+                    <li>Download the <code>jdCatVid.xpi</code> file above</li>
+                    <li>Open Firefox and go to <code>about:addons</code></li>
+                    <li>Click the gear icon and select "Install add-on from file..."</li>
+                    <li>Select the downloaded XPI file</li>
+                  </ol>
+                </div>
+                
+                <h3 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">Chrome/Chromium (Developer Mode)</h3>
+                <div class="info-box">
+                  <ol style="margin-left: 20px;">
+                    <li>Download and extract the <code>jdCatVid-chrome.zip</code> file</li>
+                    <li>Open Chrome and go to <code>chrome://extensions</code></li>
+                    <li>Enable <strong>Developer mode</strong> (top right toggle)</li>
+                    <li>Click <strong>Load unpacked</strong></li>
+                    <li>Select the extracted extension folder</li>
+                  </ol>
+                </div>
+              </div>
+              
+              <div class="section">
+                <h2>Official Distribution Channels</h2>
+                <p style="margin-bottom: 15px;">For official installations when available, visit:</p>
+                <div class="browser-links">
+                  <a href="https://addons.mozilla.org/en-US/firefox/" class="browser-link">Firefox Add-ons</a>
+                  <a href="https://chrome.google.com/webstore" class="browser-link">Chrome Web Store</a>
+                </div>
+              </div>
+              
+              <div class="section">
+                <h2>Source Code</h2>
+                <p>The source code for this extension is available on <a href="https://github.com/JakeDot/jdVidCat" style="color: #667eea;">GitHub</a>.</p>
+              </div>
+              
+              <div class="footer">
+                <p>jdVidCat - Last updated: <span id="timestamp"></span></p>
+              </div>
+            </div>
+            
+            <script>
+              // Display the current date in localized format (e.g., "January 1, 2024")
+              document.getElementById('timestamp').textContent = new Date().toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              });
+              
+              // Dynamically check which artifacts are available and show/hide cards
+              async function checkArtifacts() {
+                const artifacts = {
+                  firefox: { card: 'firefox-card', url: './downloads/jdCatVid.xpi' },
+                  chrome: { card: 'chrome-card', url: './downloads/jdCatVid-chrome.zip' },
+                  generic: { card: 'generic-card', url: './downloads/jdCatVid.zip' }
+                };
+                
+                // Check all artifacts in parallel for better performance
+                const checks = Object.entries(artifacts).map(async ([key, artifact]) => {
+                  try {
+                    const response = await fetch(artifact.url, { method: 'HEAD' });
+                    if (response.ok) {
+                      document.getElementById(artifact.card).style.display = 'block';
+                      return true;
+                    }
+                  } catch (e) {
+                    // File not found, keep hidden
+                  }
+                  return false;
+                });
+                
+                const results = await Promise.all(checks);
+                const anyFound = results.some(result => result);
+                
+                // Show or hide the "not available" message based on artifacts found
+                const noArtifactsEl = document.getElementById('no-artifacts');
+                if (!anyFound) {
+                  noArtifactsEl.style.display = 'block';
+                } else {
+                  noArtifactsEl.style.display = 'none';
+                }
+              }
+              
+              // Check artifacts immediately (script is at end of body, DOM is ready)
+              checkArtifacts();
+            </script>
           </body>
           </html>
           HTML
-          echo "Content created successfully"
+          echo "Pages content created successfully"
 
       - name: Validate Pages content
         run: |
@@ -60,6 +423,10 @@ jobs:
           fi
           echo "Content validation passed"
           echo "Content size: $(wc -c < public/index.html) bytes"
+          
+          # List all files that will be deployed
+          echo "Files to be deployed:"
+          find public -type f -exec ls -lh {} \;
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
