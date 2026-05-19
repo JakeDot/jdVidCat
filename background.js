@@ -181,11 +181,12 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
   const maxPreviewLinks = Math.floor(max * MAX_PREVIEW_LINKS_RATIO);
 
   const visitedPages = new Set();
-  const queuedUrls = new Set(); // Track queued URLs to prevent duplicates
+  const queuedUrls = new Set([startUrl]); // Track queued URLs to prevent duplicates
   const queuedPages = [startUrl];
-  queuedUrls.add(startUrl);
   const videos = new Set();
-  const videoPreviewLinks = new Set(); // Tracks preview links for status reporting; persists throughout crawl
+  // Tracks preview links for status reporting; persists throughout crawl to provide final count
+  // (unlike queuedUrls which is cleared as URLs are visited)
+  const videoPreviewLinks = new Set();
 
   const rootOrigin = new URL(startUrl).origin;
 
