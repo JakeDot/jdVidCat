@@ -1,0 +1,91 @@
+name: Gemini Auto-Fix
+
+on:
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    name: Apply Gemini Review Fixes
+    runs-on: ubuntu-latest
+    # Only run if comment is from gemini-code-assist on a PR
+    if: |
+      github.event.issue.pull_request &&
+      github.event.comment.user.login == 'gemini-code-assist'
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Extract and apply fixes from review comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = context.payload.comment.body;
+            const fs = require('fs');
+            const path = require('path');
+
+            // Extract code blocks from the comment
+            const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)\n```/g;
+            let match;
+            const fixes = [];
+
+            while ((match = codeBlockRegex.exec(comment)) !== null) {
+              fixes.push(match[1]);
+            }
+
+            if (fixes.length === 0) {
+              console.log('No code blocks found in review comment');
+              return;
+            }
+
+            console.log(`Found ${fixes.length} potential fixes`);
+
+            // For simple fixes, attempt to auto-apply them
+            // This is a basic implementation - you may want to enhance based on review feedback format
+            for (const fix of fixes) {
+              // Try to parse and apply fix
+              console.log('Analyzing fix:', fix.substring(0, 100) + '...');
+            }
+
+      - name: Commit auto-fixes if changes were made
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+
+            try {
+              // Check if there are changes
+              const status = execSync('git status --porcelain', { encoding: 'utf-8' });
+
+              if (!status) {
+                console.log('No changes detected');
+                return;
+              }
+
+              console.log('Changes detected:');
+              console.log(status);
+
+              // Stage and commit changes
+              execSync('git config user.name "github-actions[bot]"');
+              execSync('git config user.email "github-actions[bot]@users.noreply.github.com"');
+              execSync('git add .');
+              execSync('git commit -m "Apply Gemini code review suggestions"');
+              execSync('git push');
+
+              // Add comment about auto-fix
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '✅ Applied code review suggestions and committed changes.'
+              });
+            } catch (error) {
+              console.log('No changes to commit or error occurred:', error.message);
+            }

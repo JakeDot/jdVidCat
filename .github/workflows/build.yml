@@ -71,26 +71,28 @@ jobs:
           name: jdCatVid-chrome
           path: dist/jdCatVid-chrome.zip
 
-  gemini-code-assist:
-    name: Gemini Code Review
+  request-gemini-review:
+    name: Request Gemini Code Review
     runs-on: ubuntu-latest
     needs: validate-and-package
-    # Skip if PR has [no-gemini] tag in title
+    # Only run on pull requests, skip if PR has [no-gemini] tag in title
     if: |
+      github.event_name == 'pull_request' && 
       !contains(github.event.pull_request.title, '[no-gemini]')
     permissions:
-      contents: read
       pull-requests: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Gemini Code Review
-        uses: google-cloud-next/gemini-code-assist@main
+      - name: Post Gemini code review request
+        uses: actions/github-script@v7
         with:
-          project_id: ${{ secrets.GOOGLE_CLOUD_PROJECT_ID }}
-          credentials: ${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}
-        continue-on-error: true
+          script: |
+            const message = `@gemini-code-assist please do a code review of this PR`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
 
   bump-version-and-tag:
     name: Bump Version and Create Tag
