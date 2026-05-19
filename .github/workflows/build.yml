@@ -75,11 +75,12 @@ jobs:
     name: Request Gemini Code Review
     runs-on: ubuntu-latest
     needs: validate-and-package
-    # Only run on PR open/reopen (not on every push), skip if PR has [no-gemini] tag in title
-    # Also skip for fork PRs to avoid permission issues
+    # Run when PR is marked ready for review and on subsequent pushes, skip draft PRs,
+    # skip if PR has [no-gemini] tag in title, and skip fork PRs to avoid permission issues
     if: |
       github.event_name == 'pull_request' && 
-      contains(fromJson('["opened", "reopened"]'), github.event.action) &&
+      contains(fromJson('["ready_for_review", "synchronize"]'), github.event.action) &&
+      !github.event.pull_request.draft &&
       !contains(github.event.pull_request.title, '[no-gemini]') &&
       github.event.pull_request.head.repo.full_name == github.repository
     permissions:
