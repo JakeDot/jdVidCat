@@ -92,6 +92,7 @@ jobs:
           GEMINI_REVIEW_REQUEST_MESSAGE: ${{ vars.GEMINI_REVIEW_REQUEST_MESSAGE }}
         with:
           script: |
+            const GEMINI_REVIEW_MARKER = '<!-- jdcatvid:gemini-review-request -->';
             const DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE = [
               '@gemini-code-assist please review this pull request.',
               '',
@@ -109,11 +110,37 @@ jobs:
               .trim();
             const message = (configuredMessage || DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE)
               .slice(0, MAX_COMMENT_LENGTH);
+            const body = `${GEMINI_REVIEW_MARKER}\n${message}`;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+
+            const existingComment = comments.find((comment) =>
+              comment?.user?.type === 'Bot' &&
+              comment?.user?.login === 'github-actions[bot]' &&
+              typeof comment?.body === 'string' &&
+              comment.body.includes(GEMINI_REVIEW_MARKER)
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                comment_id: existingComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body
+              });
+              return;
+            }
+
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: message
+              body
             });
 
   bump-version-and-tag:
