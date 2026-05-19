@@ -337,7 +337,7 @@ jobs:
   gemini-code-assist:
     runs-on: ubuntu-latest
     needs: validate-and-package
-    if: ${{ secrets.GEMINI_API_KEY != '' }}
+    if: secrets.GEMINI_API_KEY != ''
     continue-on-error: true
     strategy:
       matrix:
