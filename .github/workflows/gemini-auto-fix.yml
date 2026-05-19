@@ -17,44 +17,78 @@ jobs:
       github.event.issue.pull_request &&
       github.event.comment.user.login == 'gemini-code-assist'
     steps:
+      - name: Read PR metadata
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.issue.number;
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
+            const isSameRepo = pr.head.repo.full_name === baseRepo;
+            core.setOutput('safe_to_modify', isSameRepo ? 'true' : 'false');
+            core.setOutput('head_ref', pr.head.ref);
+
+            if (!isSameRepo) {
+              core.warning(`Skipping auto-fix for fork PR: ${pr.head.repo.full_name}`);
+            }
+
       - name: Checkout PR branch
+        if: steps.pr.outputs.safe_to_modify == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ steps.pr.outputs.head_ref }}
           fetch-depth: 0
 
-      - name: Extract and apply fixes from review comment
+      - name: Apply actionable diff suggestions
+        if: steps.pr.outputs.safe_to_modify == 'true'
+        id: apply
         uses: actions/github-script@v7
         with:
           script: |
             const comment = context.payload.comment.body;
+            const { execSync } = require('child_process');
             const fs = require('fs');
-            const path = require('path');
 
-            // Extract code blocks from the comment
-            const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)\n```/g;
+            // Only auto-apply actionable diff blocks.
+            const codeBlockRegex = /```diff\n([\s\S]*?)```/g;
             let match;
             const fixes = [];
+            let appliedCount = 0;
 
             while ((match = codeBlockRegex.exec(comment)) !== null) {
-              fixes.push(match[1]);
+              fixes.push(match[1].trim());
             }
 
             if (fixes.length === 0) {
-              console.log('No code blocks found in review comment');
+              console.log('No actionable diff blocks found in review comment');
+              core.setOutput('applied_count', '0');
               return;
             }
 
-            console.log(`Found ${fixes.length} potential fixes`);
+            console.log(`Found ${fixes.length} actionable diff block(s)`);
 
-            // For simple fixes, attempt to auto-apply them
-            // This is a basic implementation - you may want to enhance based on review feedback format
-            for (const fix of fixes) {
-              // Try to parse and apply fix
-              console.log('Analyzing fix:', fix.substring(0, 100) + '...');
+            for (let i = 0; i < fixes.length; i++) {
+              const patchFile = `/tmp/gemini-suggestion-${i}.diff`;
+              fs.writeFileSync(patchFile, `${fixes[i]}\n`, 'utf8');
+              try {
+                execSync(`git apply --whitespace=fix "${patchFile}"`, { stdio: 'pipe' });
+                appliedCount++;
+              } catch (error) {
+                console.log(`Skipping non-applicable diff block #${i + 1}: ${error.message}`);
+              }
             }
 
+            core.setOutput('applied_count', String(appliedCount));
+            console.log(`Applied ${appliedCount} diff block(s)`);
+
       - name: Commit auto-fixes if changes were made
+        if: steps.pr.outputs.safe_to_modify == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -84,7 +118,7 @@ jobs:
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: '✅ Applied code review suggestions and committed changes.'
+                body: '✅ Applied actionable Gemini diff suggestions and committed changes.'
               });
             } catch (error) {
               console.log('No changes to commit or error occurred:', error.message);

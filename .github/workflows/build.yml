@@ -87,7 +87,7 @@ jobs:
         with:
           script: |
             const message = `@gemini-code-assist please do a code review of this PR`;
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
