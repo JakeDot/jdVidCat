@@ -172,7 +172,7 @@ async function downloadUrl(url, index) {
   } catch (error) {
     // Log error for debugging - failed downloads are not added to history
     console.warn("Download attempt failed for:", url, "Error:", error);
-    // Users can still use the Browser Download fallback link if they manually add the URL to history
+    // Users can manually retry failed downloads by copying the URL to the browser address bar
   }
 }
 
@@ -216,7 +216,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
       // Extract video preview links for traversal
       for (const previewUrl of extractVideoPreviewUrls(current, html, rootOrigin)) {
         if (!visitedPages.has(previewUrl) && !queuedUrls.has(previewUrl) && videoPreviewLinks.size < maxPreviewLinks) {
-          videoPreviewLinks.add(previewUrl);
+          videoPreviewLinks.add(previewUrl); // Track for status reporting (persists throughout crawl)
           queuedUrls.add(previewUrl);
           queuedPages.push(previewUrl);
         }
