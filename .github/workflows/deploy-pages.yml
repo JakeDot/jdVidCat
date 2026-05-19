@@ -308,7 +308,7 @@ jobs:
                     <p>Generic package for any browser</p>
                     <a href="./downloads/jdCatVid.zip" class="download-btn" download>Download ZIP</a>
                   </div>
-                  <div id="no-artifacts" class="download-card">
+                  <div id="no-artifacts" class="download-card" style="display: none;">
                     <p style="color: #999; margin: 0;">Build artifacts are not currently available. Please check back later or clone the repository directly.</p>
                   </div>
                 </div>
@@ -387,14 +387,17 @@ jobs:
                   }
                 }
                 
-                // If no artifacts found, show the "not available" message
+                // Show or hide the "not available" message based on artifacts found
+                const noArtifactsEl = document.getElementById('no-artifacts');
                 if (!anyFound) {
-                  document.getElementById('no-artifacts').style.display = 'block';
+                  noArtifactsEl.style.display = 'block';
+                } else {
+                  noArtifactsEl.style.display = 'none';
                 }
               }
               
-              // Check artifacts when page loads
-              document.addEventListener('DOMContentLoaded', checkArtifacts);
+              // Check artifacts immediately (script is at end of body, DOM is ready)
+              checkArtifacts();
             </script>
           </body>
           </html>
