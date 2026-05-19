@@ -116,8 +116,8 @@ jobs:
               `
                 query($owner: String!, $repo: String!, $issueNumber: Int!) {
                   repository(owner: $owner, name: $repo) {
-                    issue(number: $issueNumber) {
-                      comments(last: 100) {
+                    pullRequest(number: $issueNumber) {
+                      comments(last: 30) {
                         nodes {
                           id
                           databaseId
@@ -138,7 +138,12 @@ jobs:
               }
             );
 
-            const existingCommentNode = recentComments?.repository?.issue?.comments?.nodes?.find(
+            const commentNodes = recentComments?.repository?.pullRequest?.comments?.nodes;
+            if (!Array.isArray(commentNodes)) {
+              throw new Error('Failed to load pull request comments for Gemini review request deduplication.');
+            }
+
+            const existingCommentNode = commentNodes.find(
               (comment) =>
                 comment?.author?.login === 'github-actions[bot]' &&
                 typeof comment?.body === 'string' &&
