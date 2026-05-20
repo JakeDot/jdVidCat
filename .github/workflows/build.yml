@@ -73,10 +73,8 @@ jobs:
     name: Request ${{ matrix.reviewer.name }} Code Review
     runs-on: ubuntu-latest
     needs: validate-and-package
-    # Run when PR is marked ready for review and on subsequent pushes, skip draft PRs,
-    # skip if PR has [no-review] (global) or reviewer-specific skip tag in title,
-    # and skip fork PRs to avoid permission issues.
-    # Each matrix entry runs as an independent parallel subagent for its model.
+    # Trigger on PR ready-for-review and subsequent pushes; skip drafts, fork PRs,
+    # global [no-review] tag, and reviewer-specific skip tags in the PR title.
     if: |
       github.event_name == 'pull_request' &&
       contains(fromJson('["ready_for_review", "synchronize"]'), github.event.action) &&
@@ -90,155 +88,32 @@ jobs:
       matrix:
         reviewer:
           - name: Gemini
-            handle: "@gemini-code-assist"
-            marker: gemini-review-request
-            skip_tag: "[no-gemini]"
             reviewer_login: "gemini-code-assist"
-            response_bot_login: "gemini-code-assist[bot]"
+            skip_tag: "[no-gemini]"
           - name: Copilot
-            handle: "@copilot"
-            marker: copilot-review-request
-            skip_tag: "[no-copilot]"
             reviewer_login: "copilot"
-            response_bot_login: "copilot-pull-request-reviewer[bot]"
-          - name: Claude
-            handle: "@claude"
-            marker: claude-review-request
-            skip_tag: "[no-claude]"
-            reviewer_login: ""
-            response_bot_login: ""
-          - name: Codex
-            handle: "@openai-codex"
-            marker: codex-review-request
-            skip_tag: "[no-codex]"
-            reviewer_login: ""
-            response_bot_login: ""
+            skip_tag: "[no-copilot]"
     steps:
-      - name: Post ${{ matrix.reviewer.name }} code review request
+      - name: Request ${{ matrix.reviewer.name }} review via API
         if: "!contains(github.event.pull_request.title, matrix.reviewer.skip_tag)"
         uses: actions/github-script@v7
         env:
-          REVIEWER_HANDLE: ${{ matrix.reviewer.handle }}
-          REVIEWER_MARKER: ${{ matrix.reviewer.marker }}
           REVIEWER_LOGIN: ${{ matrix.reviewer.reviewer_login }}
+          REVIEWER_NAME: ${{ matrix.reviewer.name }}
         with:
           script: |
-            const REVIEW_MARKER = `<!-- jdcatvid:${process.env.REVIEWER_MARKER} -->`;
-            const GITHUB_ACTIONS_BOT_LOGIN = 'github-actions[bot]';
-            const reviewerHandle = process.env.REVIEWER_HANDLE;
-            const DEFAULT_MESSAGE = [
-              `${reviewerHandle} please review this pull request.`,
-              '',
-              'Focus areas:',
-              '- Correctness and regressions',
-              '- Edge cases and error handling',
-              '- Security risks and dependency/workflow safety',
-              '- Readability and maintainability',
-              '',
-              'If possible, suggest actionable diff-style fixes.'
-            ].join('\n');
-            const MAX_COMMENT_LENGTH = 4000;
-            const prefix = `${REVIEW_MARKER}\n`;
-            const body = prefix + DEFAULT_MESSAGE.slice(0, MAX_COMMENT_LENGTH - prefix.length);
-
-            let existingCommentNode = null;
-            let beforeCursor = null;
-            const COMMENT_PAGE_SIZE = 20;
-            // Search the most recent comments first, then page backward through older ones
-            // (up to 60 total comments: 3 pages x 20) to balance reliability and API cost.
-            const MAX_COMMENT_PAGES = 3;
-
-            for (let i = 0; i < MAX_COMMENT_PAGES && !existingCommentNode; i++) {
-              const recentComments = await github.graphql(
-                `
-                  query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String, $pageSize: Int!) {
-                    repository(owner: $owner, name: $repo) {
-                      pullRequest(number: $issueNumber) {
-                        comments(last: $pageSize, before: $before) {
-                          nodes {
-                            id
-                            databaseId
-                            body
-                            author {
-                              login
-                            }
-                          }
-                          pageInfo {
-                            hasPreviousPage
-                            startCursor
-                          }
-                        }
-                      }
-                    }
-                  }
-                `,
-                {
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issueNumber: context.issue.number,
-                  before: beforeCursor,
-                  pageSize: COMMENT_PAGE_SIZE
-                }
-              );
-
-              const commentsConnection = recentComments?.repository?.pullRequest?.comments;
-              const commentNodes = commentsConnection?.nodes;
-              if (!Array.isArray(commentNodes)) {
-                const hasRepository = Boolean(recentComments?.repository);
-                const hasPullRequest = Boolean(recentComments?.repository?.pullRequest);
-                throw new Error(
-                  `Failed to load PR comments for ${reviewerHandle} review request deduplication: expected commentNodes to be an array but received ${typeof commentNodes} (page: ${i + 1}, hasRepository: ${hasRepository}, hasPullRequest: ${hasPullRequest}).`
-                );
-              }
-
-              existingCommentNode = commentNodes.find(
-                (comment) =>
-                  comment?.author?.login === GITHUB_ACTIONS_BOT_LOGIN &&
-                  comment?.body?.includes(REVIEW_MARKER)
-              );
-
-              if (existingCommentNode || !commentsConnection?.pageInfo?.hasPreviousPage) {
-                break;
-              }
-
-              beforeCursor = commentsConnection.pageInfo.startCursor;
-            }
-
-            if (existingCommentNode) {
-              // Delete the stale comment so the thread stays pristine (no accumulation of old pings)
-              try {
-                await github.rest.issues.deleteComment({
-                  comment_id: existingCommentNode.databaseId,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                });
-              } catch (err) {
-                core.warning(`Could not delete old ${reviewerHandle} review comment: ${err.message}`);
-              }
-            }
-
-            // Always post a fresh comment so the @mention fires again on every sync
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body
-            });
-
-            // Also request the review via the GitHub API where supported (e.g. Copilot, Gemini),
-            // which is more reliable than @mention alone for some bots.
             const reviewerLogin = process.env.REVIEWER_LOGIN;
-            if (reviewerLogin) {
-              try {
-                await github.rest.pulls.requestReviewers({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: context.issue.number,
-                  reviewers: [reviewerLogin],
-                });
-              } catch (err) {
-                core.warning(`API review request for ${reviewerHandle} failed (will rely on @mention): ${err.message}`);
-              }
+            const reviewerName = process.env.REVIEWER_NAME;
+            try {
+              await github.rest.pulls.requestReviewers({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                reviewers: [reviewerLogin],
+              });
+              core.info(`Requested ${reviewerName} review via API.`);
+            } catch (err) {
+              core.warning(`API review request for ${reviewerName} failed: ${err.message}`);
             }
 
   bump-version-and-tag:
