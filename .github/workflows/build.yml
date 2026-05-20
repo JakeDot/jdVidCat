@@ -69,31 +69,56 @@ jobs:
           name: jdCatVid-chrome
           path: dist/jdCatVid-chrome.zip
 
-  request-gemini-review:
-    name: Request Gemini Code Review
+  request-ai-reviews:
+    name: Request ${{ matrix.reviewer.name }} Code Review
     runs-on: ubuntu-latest
     needs: validate-and-package
     # Run when PR is marked ready for review and on subsequent pushes, skip draft PRs,
-    # skip if PR has [no-gemini] tag in title, and skip fork PRs to avoid permission issues
+    # skip if PR has [no-review] (global) or reviewer-specific skip tag in title,
+    # and skip fork PRs to avoid permission issues.
+    # Each matrix entry runs as an independent parallel subagent for its model.
     if: |
-      github.event_name == 'pull_request' && 
+      github.event_name == 'pull_request' &&
       contains(fromJson('["ready_for_review", "synchronize"]'), github.event.action) &&
       !github.event.pull_request.draft &&
-      !contains(github.event.pull_request.title, '[no-gemini]') &&
+      !contains(github.event.pull_request.title, '[no-review]') &&
+      !contains(github.event.pull_request.title, matrix.reviewer.skip_tag) &&
       github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        reviewer:
+          - name: Gemini
+            handle: "@gemini-code-assist"
+            marker: gemini-review-request
+            skip_tag: "[no-gemini]"
+          - name: Copilot
+            handle: "@copilot"
+            marker: copilot-review-request
+            skip_tag: "[no-copilot]"
+          - name: Claude
+            handle: "@claude"
+            marker: claude-review-request
+            skip_tag: "[no-claude]"
+          - name: Codex
+            handle: "@openai-codex"
+            marker: codex-review-request
+            skip_tag: "[no-codex]"
     steps:
-      - name: Post Gemini code review request
+      - name: Post ${{ matrix.reviewer.name }} code review request
         uses: actions/github-script@v7
         env:
-          GEMINI_REVIEW_REQUEST_MESSAGE: ${{ vars.GEMINI_REVIEW_REQUEST_MESSAGE }}
+          REVIEWER_HANDLE: ${{ matrix.reviewer.handle }}
+          REVIEWER_MARKER: ${{ matrix.reviewer.marker }}
         with:
           script: |
-            const GEMINI_REVIEW_MARKER = '<!-- jdcatvid:gemini-review-request -->';
+            const REVIEW_MARKER = `<!-- jdcatvid:${process.env.REVIEWER_MARKER} -->`;
             const GITHUB_ACTIONS_BOT_LOGIN = 'github-actions[bot]';
-            const DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE = [
-              '@gemini-code-assist please review this pull request.',
+            const reviewerHandle = process.env.REVIEWER_HANDLE;
+            const DEFAULT_MESSAGE = [
+              `${reviewerHandle} please review this pull request.`,
               '',
               'Focus areas:',
               '- Correctness and regressions',
@@ -104,12 +129,8 @@ jobs:
               'If possible, suggest actionable diff-style fixes.'
             ].join('\n');
             const MAX_COMMENT_LENGTH = 4000;
-            const configuredMessage = (process.env.GEMINI_REVIEW_REQUEST_MESSAGE || '')
-              .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
-              .trim();
-            const message = (configuredMessage || DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE)
-              .slice(0, MAX_COMMENT_LENGTH);
-            const body = `${GEMINI_REVIEW_MARKER}\n${message}`;
+            const prefix = `${REVIEW_MARKER}\n`;
+            const body = prefix + DEFAULT_MESSAGE.slice(0, MAX_COMMENT_LENGTH - prefix.length);
 
             let existingCommentNode = null;
             let beforeCursor = null;
@@ -157,14 +178,14 @@ jobs:
                 const hasRepository = Boolean(recentComments?.repository);
                 const hasPullRequest = Boolean(recentComments?.repository?.pullRequest);
                 throw new Error(
-                  `Failed to load PR comments for Gemini review request deduplication: expected commentNodes to be an array but received ${typeof commentNodes} (page: ${i + 1}, hasRepository: ${hasRepository}, hasPullRequest: ${hasPullRequest}).`
+                  `Failed to load PR comments for ${reviewerHandle} review request deduplication: expected commentNodes to be an array but received ${typeof commentNodes} (page: ${i + 1}, hasRepository: ${hasRepository}, hasPullRequest: ${hasPullRequest}).`
                 );
               }
 
               existingCommentNode = commentNodes.find(
                 (comment) =>
                   comment?.author?.login === GITHUB_ACTIONS_BOT_LOGIN &&
-                  comment?.body?.includes(GEMINI_REVIEW_MARKER)
+                  comment?.body?.includes(REVIEW_MARKER)
               );
 
               if (existingCommentNode || !commentsConnection?.pageInfo?.hasPreviousPage) {
