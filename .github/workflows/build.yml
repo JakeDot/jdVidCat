@@ -108,8 +108,10 @@ jobs:
             marker: codex-review-request
             skip_tag: "[no-codex]"
     steps:
-      - name: Checkout (required for local composite action)
+      - name: Checkout (with submodule for composite action)
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Check reviewer-specific skip tag
         id: skip-check
