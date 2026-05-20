@@ -41,7 +41,15 @@ function setStatus(text) {
 function buildJDownloaderLink(url) {
   // jDownloader supports the dlapi:// protocol handler for adding downloads
   // This requires jDownloader to be installed with the protocol handler registered
-  // If jDownloader is not available, the link will not work but won't cause errors
+  // Only allow http/https/blob URLs to prevent passing unsafe schemes to external handlers
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:" && parsed.protocol !== "blob:") {
+      return "#";
+    }
+  } catch {
+    return "#";
+  }
   return `dlapi://dl/${encodeURIComponent(url)}`;
 }
 
@@ -133,7 +141,9 @@ clearHistoryBtn.addEventListener("click", () => {
 });
 
 startButton.addEventListener("click", async () => {
-  const maxDownloads = Math.max(1, Number.parseInt(maxDownloadsNode.value, 10) || 100);
+  const rawValue = Number.parseInt(maxDownloadsNode.value, 10);
+  const maxDownloads = Number.isNaN(rawValue) || rawValue <= 0 ? 100 : Math.min(rawValue, 10000);
+  maxDownloadsNode.value = maxDownloads;
   chrome.storage.sync.set({ maxDownloads });
 
   setStatus("Reading current tab...");

@@ -1,7 +1,10 @@
 const DEFAULT_MAX_DOWNLOADS = 100;
+const MAX_DOWNLOADS_LIMIT = 10000; // Upper bound to prevent unreasonably large jobs
 const VIDEO_EXTENSIONS = ["mp4", "m4v", "webm", "mov", "mkv", "avi", "m3u8"];
 const MAX_HISTORY_ENTRIES = 100;
 const MAX_PREVIEW_LINKS_RATIO = 0.2; // 20% of max downloads for preview links to prevent excessive crawling while still discovering content
+const MAX_CRAWL_PAGES = 500; // Hard limit on pages visited to prevent runaway crawls
+const FETCH_TIMEOUT_MS = 30000; // 30 second timeout per page fetch
 
 // Configuration for smart link traversal
 const PREVIEW_LINK_PATTERNS = [
@@ -25,7 +28,12 @@ function toAbsolute(baseUrl, candidate) {
     return null;
   }
   try {
-    return new URL(normalizedCandidate, baseUrl).href;
+    const url = new URL(normalizedCandidate, baseUrl);
+    // Only allow http/https to prevent file://, javascript:, data:, etc.
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return null;
+    }
+    return url.href;
   } catch {
     return null;
   }
@@ -113,7 +121,7 @@ function filenameFromUrl(url, index, extensionFallback = "mp4") {
   try {
     const parsed = new URL(url);
     const pathName = parsed.pathname.split("/").filter(Boolean).pop() || `video-${index + 1}.${extensionFallback}`;
-    const cleaned = pathName.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const cleaned = pathName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 200);
     return `jdCatVid/${String(index + 1).padStart(3, "0")}-${cleaned}`;
   } catch {
     return `jdCatVid/${String(index + 1).padStart(3, "0")}-video.${extensionFallback}`;
@@ -136,6 +144,9 @@ async function collectBlobUrlsFromTab(tabId) {
 }
 
 async function convertBlobToDataUrl(tabId, blobUrl) {
+  if (typeof blobUrl !== "string" || !blobUrl.startsWith("blob:")) {
+    return { ok: false, error: "Not a valid blob URL" };
+  }
   const [result] = await chrome.scripting.executeScript({
     target: { tabId },
     args: [blobUrl],
@@ -177,7 +188,7 @@ async function downloadUrl(url, index) {
 }
 
 async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MAX_DOWNLOADS }) {
-  const max = Number.isFinite(maxDownloads) ? Math.max(1, Math.floor(maxDownloads)) : DEFAULT_MAX_DOWNLOADS;
+  const max = Number.isFinite(maxDownloads) ? Math.max(1, Math.min(Math.floor(maxDownloads), MAX_DOWNLOADS_LIMIT)) : DEFAULT_MAX_DOWNLOADS;
   const maxPreviewLinks = Math.floor(max * MAX_PREVIEW_LINKS_RATIO);
 
   const visitedPages = new Set();
@@ -190,7 +201,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
 
   const rootOrigin = new URL(startUrl).origin;
 
-  while (queuedPages.length > 0 && videos.size < max) {
+  while (queuedPages.length > 0 && videos.size < max && visitedPages.size < MAX_CRAWL_PAGES) {
     const current = queuedPages.shift();
     if (!current || visitedPages.has(current)) {
       continue;
@@ -200,7 +211,14 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
     queuedUrls.delete(current);
 
     try {
-      const response = await fetch(current, { credentials: "include" });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch(current, { credentials: "include", signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       if (!response.ok) {
         continue;
       }
@@ -280,13 +298,19 @@ async function getDownloadHistory() {
 
 async function addDownloadToHistory(url, filename) {
   const history = await getDownloadHistory();
-  // Generate a more robust unique ID
-  const randomBytes = new Uint8Array(8);
-  crypto.getRandomValues(randomBytes);
-  const randomHex = Array.from(randomBytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  // Use randomUUID if available, otherwise fall back to timestamp + random hex
+  let id;
+  if (crypto.randomUUID) {
+    id = crypto.randomUUID();
+  } else {
+    const randomBytes = new Uint8Array(8);
+    crypto.getRandomValues(randomBytes);
+    const randomHex = Array.from(randomBytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    id = `${Date.now()}-${randomHex}`;
+  }
   
   const entry = {
-    id: `${Date.now()}-${randomHex}`,
+    id,
     url,
     filename,
     timestamp: new Date().toISOString()
@@ -355,9 +379,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return;
   }
 
+  const payload = message.payload;
+  if (!payload?.startUrl || typeof payload.startUrl !== "string") {
+    sendResponse({ ok: false, error: "Invalid payload: startUrl is required" });
+    return true;
+  }
+
   (async () => {
     try {
-      const result = await startDownloadFromTab(message.payload);
+      const result = await startDownloadFromTab(payload);
       sendResponse({ ok: true, result });
     } catch (error) {
       sendResponse({ ok: false, error: String(error) });
