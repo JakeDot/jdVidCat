@@ -1,3 +1,6 @@
+/**
+ * @jest-environment node
+ */
 "use strict";
 
 // ── Chrome API mock (must be set up before requiring background.js) ──────────

@@ -3,12 +3,8 @@
  */
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
-
-const contentCode = fs.readFileSync(path.join(__dirname, "../content.js"), "utf8");
-
-// Track calls to the original createObjectURL so tests can inspect them.
+// URL.createObjectURL must be mocked before content.js is loaded so the IIFE
+// captures our mock as `originalCreateObjectURL`.
 let mockCreateObjectURL;
 let blobCounter = 0;
 
@@ -16,8 +12,10 @@ beforeAll(() => {
   mockCreateObjectURL = jest.fn(() => `blob:https://example.com/${++blobCounter}`);
   URL.createObjectURL = mockCreateObjectURL;
 
-  // eslint-disable-next-line no-eval
-  eval(contentCode);
+  // Require content.js to run its IIFE in the jsdom environment.
+  // Jest sets up jsdom globals (document, window, URL, MutationObserver) before
+  // the require, so the script behaves exactly as it would in a browser page.
+  require("../content.js");
 });
 
 // ── __jdCatVidBlobUrls property descriptor ────────────────────────────────────
