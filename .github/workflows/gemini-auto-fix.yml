@@ -6,7 +6,11 @@ on:
 
 jobs:
   auto-fix:
-    if: github.event.issue.pull_request != null && github.event.comment.user.login == 'gemini-code-assist[bot]' && github.event.comment.user.type == 'Bot'
+    if: >
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.login == 'gemini-code-assist[bot]' &&
+      github.event.comment.user.type == 'Bot' &&
+      github.event.repository.full_name == github.repository
     uses: JakeDot/jd-ai-review-action/.github/workflows/gemini-auto-fix.yml@main
     permissions:
       contents: write

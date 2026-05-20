@@ -72,6 +72,12 @@ jobs:
   request-ai-reviews:
     name: Request AI Code Reviews
     needs: validate-and-package
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.action != 'closed' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !contains(github.event.pull_request.title, '[no-review]')
     uses: JakeDot/jd-ai-review-action/.github/workflows/request-ai-reviews.yml@v1
     permissions:
       pull-requests: write
