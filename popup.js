@@ -233,3 +233,8 @@ chrome.runtime.onMessage.addListener((message) => {
     }
   }
 });
+
+/* istanbul ignore next */
+if (typeof module !== "undefined") {
+  module.exports = { buildJDownloaderLink, setCopyButtonFeedback, setStatus };
+}
