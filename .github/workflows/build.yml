@@ -70,54 +70,11 @@ jobs:
           path: dist/jdCatVid-chrome.zip
 
   request-ai-reviews:
-    name: Request ${{ matrix.reviewer.name }} Code Review
-    runs-on: ubuntu-latest
+    name: Request AI Code Reviews
     needs: validate-and-package
-    # Trigger on PR ready-for-review and subsequent pushes; skip drafts, fork PRs,
-    # global [no-review] tag, and reviewer-specific skip tags checked at step level
-    # (matrix context is forbidden in job-level if conditions).
-    if: |
-      github.event_name == 'pull_request' &&
-      contains(fromJson('["ready_for_review", "synchronize"]'), github.event.action) &&
-      !github.event.pull_request.draft &&
-      !contains(github.event.pull_request.title, '[no-review]') &&
-      github.event.pull_request.head.repo.full_name == github.repository
+    uses: JakeDot/jd-ai-review-action/.github/workflows/request-ai-reviews.yml@main
     permissions:
       pull-requests: write
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        reviewer:
-          - name: Gemini
-            reviewer_login: "gemini-code-assist"
-            skip_tag: "[no-gemini]"
-          - name: Copilot
-            reviewer_login: "copilot"
-            skip_tag: "[no-copilot]"
-    steps:
-      - name: Checkout (with submodule for composite action)
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Check reviewer-specific skip tag
-        id: skip-check
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          SKIP_TAG: ${{ matrix.reviewer.skip_tag }}
-        run: |
-          if echo "$PR_TITLE" | grep -qF "$SKIP_TAG"; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Request ${{ matrix.reviewer.name }} code review
-        if: steps.skip-check.outputs.skip != 'true'
-        uses: ./.github/actions/request-ai-review
-        with:
-          reviewer-login: ${{ matrix.reviewer.reviewer_login }}
 
   bump-version-and-tag:
     name: Bump Version and Create Tag
