@@ -1,6 +1,6 @@
 # jdCatVid
 
-<img alt="logo" src="tree/main/icon.svg" />
+<img alt="logo" src="https://raw.githubusercontent.com/JakeDot/jdVidCat/refs/heads/main/icons/jdcatvid.svg" />
 
 JakeDot Video Category Downloader
 
