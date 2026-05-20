@@ -6,6 +6,8 @@ const historyListNode = document.getElementById("historyList");
 
 const MAX_PATHNAME_LENGTH = 50;
 const MAX_URL_DISPLAY_LENGTH = 60;
+const COPY_FEEDBACK_DURATION_MS = 1500;
+const copyTimers = new WeakMap();
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabContents = document.querySelectorAll(".tab-content");
 
@@ -36,6 +38,13 @@ chrome.storage.sync.get(["maxDownloads"], ({ maxDownloads }) => {
 
 function setStatus(text) {
   statusNode.textContent = text;
+}
+
+function setCopyButtonFeedback(btn, label) {
+  const originalLabel = btn.dataset.originalLabel || "Copy URL";
+  clearTimeout(copyTimers.get(btn));
+  btn.textContent = label;
+  copyTimers.set(btn, setTimeout(() => { btn.textContent = originalLabel; }, COPY_FEEDBACK_DURATION_MS));
 }
 
 function buildJDownloaderLink(url) {
@@ -131,18 +140,14 @@ function loadHistory() {
         const copyBtn = document.createElement("button");
         copyBtn.className = "history-item-copy-btn";
         copyBtn.textContent = "Copy URL";
+        copyBtn.dataset.originalLabel = "Copy URL";
         copyBtn.title = "Copy video URL to clipboard";
-        let copyResetTimer = null;
         copyBtn.addEventListener("click", () => {
           navigator.clipboard.writeText(entry.url).then(() => {
-            clearTimeout(copyResetTimer);
-            copyBtn.textContent = "Copied!";
-            copyResetTimer = setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 1500);
+            setCopyButtonFeedback(copyBtn, "Copied!");
           }).catch((err) => {
             console.error("Failed to copy URL to clipboard:", err);
-            clearTimeout(copyResetTimer);
-            copyBtn.textContent = "Failed";
-            copyResetTimer = setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 1500);
+            setCopyButtonFeedback(copyBtn, "Failed");
           });
         });
         item.appendChild(copyBtn);
