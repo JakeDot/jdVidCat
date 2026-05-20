@@ -249,8 +249,11 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
           queuedPages.push(pageUrl);
         }
       }
-    } catch {
-      // ignore fetch failures for individual pages and continue crawl
+    } catch (err) {
+      // Log fetch failures so they surface in the console without breaking the crawl.
+      // toAbsolute() already rejects javascript:, data:, file:, etc., so such URLs
+      // never reach fetch(); this warning covers genuine network or parse errors.
+      console.warn("jdCatVid: failed to fetch page during crawl:", current, err);
     }
   }
 
