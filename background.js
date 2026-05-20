@@ -249,8 +249,11 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
           queuedPages.push(pageUrl);
         }
       }
-    } catch {
-      // ignore fetch failures for individual pages and continue crawl
+    } catch (err) {
+      // Log fetch failures so they surface in the console without breaking the crawl.
+      // toAbsolute() already rejects javascript:, data:, file:, etc., so such URLs
+      // never reach fetch(); this warning covers genuine network or parse errors.
+      console.warn("jdCatVid: failed to fetch page during crawl:", current, err);
     }
   }
 
@@ -382,6 +385,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const payload = message.payload;
   if (!payload?.startUrl || typeof payload.startUrl !== "string") {
     sendResponse({ ok: false, error: "Invalid payload: startUrl is required" });
+    return true;
+  }
+
+  try {
+    const parsed = new URL(payload.startUrl);
+    if (!["https:", "http:"].includes(parsed.protocol)) {
+      sendResponse({ ok: false, error: "Invalid payload: startUrl must use http or https" });
+      return true;
+    }
+  } catch {
+    sendResponse({ ok: false, error: "Invalid payload: startUrl is not a valid URL" });
     return true;
   }
 
