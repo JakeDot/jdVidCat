@@ -11,7 +11,8 @@ jobs:
       github.event.comment.user.login == 'gemini-code-assist[bot]' &&
       github.event.comment.user.type == 'Bot' &&
       github.event.repository.full_name == github.repository
-    uses: JakeDot/jd-ai-review-action/.github/workflows/gemini-auto-fix.yml@main
+    # Pinned to @main as of 2026-05-20 (22bdfb21) — update when jd-ai-review-action releases a new version
+    uses: JakeDot/jd-ai-review-action/.github/workflows/gemini-auto-fix.yml@22bdfb21e757838a48ad628c40ac41d3232fe329
     permissions:
       contents: write
       pull-requests: write
