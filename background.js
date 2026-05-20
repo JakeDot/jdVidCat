@@ -121,7 +121,7 @@ function filenameFromUrl(url, index, extensionFallback = "mp4") {
   try {
     const parsed = new URL(url);
     const pathName = parsed.pathname.split("/").filter(Boolean).pop() || `video-${index + 1}.${extensionFallback}`;
-    const cleaned = pathName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100);
+    const cleaned = pathName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 200);
     return `jdCatVid/${String(index + 1).padStart(3, "0")}-${cleaned}`;
   } catch {
     return `jdCatVid/${String(index + 1).padStart(3, "0")}-video.${extensionFallback}`;
@@ -300,7 +300,7 @@ async function addDownloadToHistory(url, filename) {
   const history = await getDownloadHistory();
   // Use randomUUID if available, otherwise fall back to timestamp + random hex
   let id;
-  if (typeof crypto.randomUUID === "function") {
+  if (crypto.randomUUID) {
     id = crypto.randomUUID();
   } else {
     const randomBytes = new Uint8Array(8);

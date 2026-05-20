@@ -45,10 +45,10 @@ function buildJDownloaderLink(url) {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:" && parsed.protocol !== "blob:") {
-      return "javascript:void(0)";
+      return "#";
     }
   } catch {
-    return "javascript:void(0)";
+    return "#";
   }
   return `dlapi://dl/${encodeURIComponent(url)}`;
 }
