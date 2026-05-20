@@ -4,9 +4,10 @@
   // Expose blob URLs via a non-writable, non-configurable getter so that
   // host-page scripts cannot replace or clear the array while the background
   // script can still read the live data via executeScript.
+  let cachedArray = [];
   Object.defineProperty(window, "__jdCatVidBlobUrls", {
     get() {
-      return [...blobUrls];
+      return cachedArray;
     },
     configurable: false,
     enumerable: false
@@ -15,6 +16,7 @@
   function persistBlobUrl(value) {
     if (typeof value === "string" && value.startsWith("blob:")) {
       blobUrls.add(value);
+      cachedArray = [...blobUrls];
     }
   }
 

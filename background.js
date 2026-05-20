@@ -387,7 +387,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   try {
     const parsed = new URL(payload.startUrl);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    if (!["https:", "http:"].includes(parsed.protocol)) {
       sendResponse({ ok: false, error: "Invalid payload: startUrl must use http or https" });
       return true;
     }
