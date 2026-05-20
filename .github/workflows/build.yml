@@ -71,6 +71,128 @@ jobs:
           name: jdCatVid-chrome
           path: dist/jdCatVid-chrome.zip
 
+  request-gemini-review:
+    name: Request Gemini Code Review
+    runs-on: ubuntu-latest
+    needs: validate-and-package
+    # Run when PR is marked ready for review and on subsequent pushes, skip draft PRs,
+    # skip if PR has [no-gemini] tag in title, and skip fork PRs to avoid permission issues
+    if: |
+      github.event_name == 'pull_request' && 
+      contains(fromJson('["ready_for_review", "synchronize"]'), github.event.action) &&
+      !github.event.pull_request.draft &&
+      !contains(github.event.pull_request.title, '[no-gemini]') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Post Gemini code review request
+        uses: actions/github-script@v7
+        env:
+          GEMINI_REVIEW_REQUEST_MESSAGE: ${{ vars.GEMINI_REVIEW_REQUEST_MESSAGE }}
+        with:
+          script: |
+            const GEMINI_REVIEW_MARKER = '<!-- jdcatvid:gemini-review-request -->';
+            const GITHUB_ACTIONS_BOT_LOGIN = 'github-actions[bot]';
+            const DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE = [
+              '@gemini-code-assist please review this pull request.',
+              '',
+              'Focus areas:',
+              '- Correctness and regressions',
+              '- Edge cases and error handling',
+              '- Security risks and dependency/workflow safety',
+              '- Readability and maintainability',
+              '',
+              'If possible, suggest actionable diff-style fixes.'
+            ].join('\n');
+            const MAX_COMMENT_LENGTH = 4000;
+            const configuredMessage = (process.env.GEMINI_REVIEW_REQUEST_MESSAGE || '')
+              .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+              .trim();
+            const message = (configuredMessage || DEFAULT_GEMINI_REVIEW_REQUEST_MESSAGE)
+              .slice(0, MAX_COMMENT_LENGTH);
+            const body = `${GEMINI_REVIEW_MARKER}\n${message}`;
+
+            let existingCommentNode = null;
+            let beforeCursor = null;
+            const COMMENT_PAGE_SIZE = 20;
+            // Search the most recent comments first, then page backward through older ones
+            // (up to 60 total comments: 3 pages x 20) to balance reliability and API cost.
+            const MAX_COMMENT_PAGES = 3;
+
+            for (let i = 0; i < MAX_COMMENT_PAGES && !existingCommentNode; i++) {
+              const recentComments = await github.graphql(
+                `
+                  query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String, $pageSize: Int!) {
+                    repository(owner: $owner, name: $repo) {
+                      pullRequest(number: $issueNumber) {
+                        comments(last: $pageSize, before: $before) {
+                          nodes {
+                            id
+                            databaseId
+                            body
+                            author {
+                              login
+                            }
+                          }
+                          pageInfo {
+                            hasPreviousPage
+                            startCursor
+                          }
+                        }
+                      }
+                    }
+                  }
+                `,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issueNumber: context.issue.number,
+                  before: beforeCursor,
+                  pageSize: COMMENT_PAGE_SIZE
+                }
+              );
+
+              const commentsConnection = recentComments?.repository?.pullRequest?.comments;
+              const commentNodes = commentsConnection?.nodes;
+              if (!Array.isArray(commentNodes)) {
+                const hasRepository = Boolean(recentComments?.repository);
+                const hasPullRequest = Boolean(recentComments?.repository?.pullRequest);
+                throw new Error(
+                  `Failed to load PR comments for Gemini review request deduplication: expected commentNodes to be an array but received ${typeof commentNodes} (page: ${i + 1}, hasRepository: ${hasRepository}, hasPullRequest: ${hasPullRequest}).`
+                );
+              }
+
+              existingCommentNode = commentNodes.find(
+                (comment) =>
+                  comment?.author?.login === GITHUB_ACTIONS_BOT_LOGIN &&
+                  comment?.body?.includes(GEMINI_REVIEW_MARKER)
+              );
+
+              if (existingCommentNode || !commentsConnection?.pageInfo?.hasPreviousPage) {
+                break;
+              }
+
+              beforeCursor = commentsConnection.pageInfo.startCursor;
+            }
+
+            if (existingCommentNode) {
+              await github.rest.issues.updateComment({
+                comment_id: existingCommentNode.databaseId,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body
+              });
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
   bump-version-and-tag:
     name: Bump Version and Create Tag
     runs-on: ubuntu-latest
@@ -256,6 +378,45 @@ jobs:
           refresh_token: ${{ secrets.CHROME_REFRESH_TOKEN }}
           zip_file: dist/jdCatVid-chrome.zip
 
+  publish-github-package:
+    name: Publish GitHub Package Assets
+    runs-on: ubuntu-latest
+    needs: validate-and-package
+    if: github.event_name == 'release'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Firefox XPI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jdCatVid-xpi
+          path: dist
+
+      - name: Download Chromium ZIP artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jdCatVid-chrome
+          path: dist
+
+      - name: Build Source Code ZIP
+        run: |
+          mkdir -p dist
+          git archive --format=zip --output dist/jdCatVid-source.zip HEAD
+
+      - name: Upload release package assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/jdCatVid.xpi
+            dist/jdCatVid-chrome.zip
+            dist/jdCatVid-source.zip
+          fail_on_unmatched_files: true
+
   publish-firefox-amo:
     name: Publish Firefox Extension
     runs-on: ubuntu-latest
@@ -333,24 +494,3 @@ jobs:
             --artifacts-dir /tmp/firefox-artifacts \
             --channel listed \
             --no-input
-
-  gemini-code-assist:
-    runs-on: ubuntu-latest
-    needs: validate-and-package
-    if: ${{ secrets.GEMINI_API_KEY != '' }}
-    continue-on-error: true
-    strategy:
-      matrix:
-        model: [gemini-2.5-pro, gemini-2.5-flash, gemini-2.0-flash]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run Gemini Code Assist (${{ matrix.model }})
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ matrix.model }}
-        run: |
-          npx -y @google/gemini-cli \
-            --model "$GEMINI_MODEL" \
-            --prompt "Review this repository for build and extension issues."
