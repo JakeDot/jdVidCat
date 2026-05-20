@@ -134,13 +134,12 @@ function loadHistory() {
         copyBtn.title = "Copy video URL to clipboard";
         let copyResetTimer = null;
         copyBtn.addEventListener("click", () => {
+          clearTimeout(copyResetTimer);
           navigator.clipboard.writeText(entry.url).then(() => {
-            clearTimeout(copyResetTimer);
             copyBtn.textContent = "Copied!";
             copyResetTimer = setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 1500);
           }).catch((err) => {
             console.error("Failed to copy URL to clipboard:", err);
-            clearTimeout(copyResetTimer);
             copyBtn.textContent = "Failed";
             copyResetTimer = setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 1500);
           });
