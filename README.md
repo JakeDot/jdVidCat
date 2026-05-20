@@ -1,5 +1,7 @@
 # jdCatVid
 
+<img alt="logo" src="tree/main/icon.svg" />
+
 JakeDot Video Category Downloader
 
 ## jdCatVid browser extension
