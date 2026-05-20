@@ -6,10 +6,10 @@ on:
 
 jobs:
   auto-fix:
+    if: github.event.issue.pull_request != null && github.event.comment.user.login == 'gemini-code-assist[bot]' && github.event.comment.user.type == 'Bot'
     uses: JakeDot/jd-ai-review-action/.github/workflows/gemini-auto-fix.yml@main
     permissions:
       contents: write
       pull-requests: write
     with:
       allowed_path_pattern: '^(manifest\.json|background\.js|content\.js|popup\.js|popup\.html|icons\/[A-Za-z0-9._-]+)$'
-
