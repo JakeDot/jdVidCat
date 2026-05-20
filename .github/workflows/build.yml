@@ -72,7 +72,7 @@ jobs:
   request-ai-reviews:
     name: Request AI Code Reviews
     needs: validate-and-package
-    uses: JakeDot/jd-ai-review-action/.github/workflows/request-ai-reviews.yml@main
+    uses: JakeDot/jd-ai-review-action/.github/workflows/request-ai-reviews.yml@v1
     permissions:
       pull-requests: write
 
