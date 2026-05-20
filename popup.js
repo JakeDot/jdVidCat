@@ -144,7 +144,21 @@ function loadHistory() {
         copyBtn.title = "Copy video URL to clipboard";
         copyBtn.addEventListener("click", () => {
           clearTimeout(copyTimers.get(copyBtn));
-          navigator.clipboard.writeText(entry.url).then(() => {
+          if (typeof navigator.clipboard?.writeText !== "function") {
+            setCopyButtonFeedback(copyBtn, "Failed");
+            return;
+          }
+
+          let writePromise;
+          try {
+            writePromise = navigator.clipboard.writeText(entry.url);
+          } catch (err) {
+            console.error("Failed to copy URL to clipboard:", err);
+            setCopyButtonFeedback(copyBtn, "Failed");
+            return;
+          }
+
+          writePromise.then(() => {
             setCopyButtonFeedback(copyBtn, "Copied!");
           }).catch((err) => {
             console.error("Failed to copy URL to clipboard:", err);
