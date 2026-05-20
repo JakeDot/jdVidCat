@@ -93,18 +93,22 @@ jobs:
             handle: "@gemini-code-assist"
             marker: gemini-review-request
             skip_tag: "[no-gemini]"
+            reviewer_login: "gemini-code-assist"
           - name: Copilot
             handle: "@copilot"
             marker: copilot-review-request
             skip_tag: "[no-copilot]"
+            reviewer_login: "copilot"
           - name: Claude
             handle: "@claude"
             marker: claude-review-request
             skip_tag: "[no-claude]"
+            reviewer_login: ""
           - name: Codex
             handle: "@openai-codex"
             marker: codex-review-request
             skip_tag: "[no-codex]"
+            reviewer_login: ""
     steps:
       - name: Post ${{ matrix.reviewer.name }} code review request
         if: "!contains(github.event.pull_request.title, matrix.reviewer.skip_tag)"
@@ -112,6 +116,7 @@ jobs:
         env:
           REVIEWER_HANDLE: ${{ matrix.reviewer.handle }}
           REVIEWER_MARKER: ${{ matrix.reviewer.marker }}
+          REVIEWER_LOGIN: ${{ matrix.reviewer.reviewer_login }}
         with:
           script: |
             const REVIEW_MARKER = `<!-- jdcatvid:${process.env.REVIEWER_MARKER} -->`;
@@ -196,21 +201,41 @@ jobs:
             }
 
             if (existingCommentNode) {
-              await github.rest.issues.updateComment({
-                comment_id: existingCommentNode.databaseId,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body
-              });
-              return;
+              // Delete the stale comment so the thread stays pristine (no accumulation of old pings)
+              try {
+                await github.rest.issues.deleteComment({
+                  comment_id: existingCommentNode.databaseId,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                });
+              } catch (err) {
+                core.warning(`Could not delete old ${reviewerHandle} review comment: ${err.message}`);
+              }
             }
 
+            // Always post a fresh comment so the @mention fires again on every sync
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body
             });
+
+            // Also request the review via the GitHub API where supported (e.g. Copilot, Gemini),
+            // which is more reliable than @mention alone for some bots.
+            const reviewerLogin = process.env.REVIEWER_LOGIN;
+            if (reviewerLogin) {
+              try {
+                await github.rest.pulls.requestReviewers({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  reviewers: [reviewerLogin],
+                });
+              } catch (err) {
+                core.warning(`API review request for ${reviewerHandle} failed (will rely on @mention): ${err.message}`);
+              }
+            }
 
   bump-version-and-tag:
     name: Bump Version and Create Tag
