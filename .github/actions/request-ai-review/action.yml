@@ -24,7 +24,6 @@ runs:
   steps:
     - name: Post or update review-request comment
       uses: actions/github-script@v7
-      timeout-minutes: 3
       env:
         REVIEWER_HANDLE: ${{ inputs.reviewer-handle }}
         REVIEWER_MARKER: ${{ inputs.reviewer-marker }}

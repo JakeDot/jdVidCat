@@ -117,7 +117,7 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           SKIP_TAG: ${{ matrix.reviewer.skip_tag }}
         run: |
-          if [[ "$PR_TITLE" == *"$SKIP_TAG"* ]]; then
+          if echo "$PR_TITLE" | grep -qF "$SKIP_TAG"; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
