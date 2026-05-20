@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "jdCatVid",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Download videos from category/tag pages with pagination crawl and blob URL support.",
   "permissions": [
     "activeTab",
