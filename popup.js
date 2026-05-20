@@ -143,6 +143,7 @@ function loadHistory() {
         copyBtn.dataset.originalLabel = "Copy URL";
         copyBtn.title = "Copy video URL to clipboard";
         copyBtn.addEventListener("click", () => {
+          clearTimeout(copyTimers.get(copyBtn));
           navigator.clipboard.writeText(entry.url).then(() => {
             setCopyButtonFeedback(copyBtn, "Copied!");
           }).catch((err) => {
