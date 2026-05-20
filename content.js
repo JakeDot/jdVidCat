@@ -1,10 +1,20 @@
 (() => {
   const blobUrls = new Set();
 
+  // Expose blob URLs via a non-writable, non-configurable getter so that
+  // host-page scripts cannot replace or clear the array while the background
+  // script can still read the live data via executeScript.
+  Object.defineProperty(window, "__jdCatVidBlobUrls", {
+    get() {
+      return [...blobUrls];
+    },
+    configurable: false,
+    enumerable: false
+  });
+
   function persistBlobUrl(value) {
     if (typeof value === "string" && value.startsWith("blob:")) {
       blobUrls.add(value);
-      window.__jdCatVidBlobUrls = [...blobUrls];
     }
   }
 
@@ -29,6 +39,4 @@
   } else {
     scanVideoElements();
   }
-
-  window.__jdCatVidBlobUrls = [...blobUrls];
 })();

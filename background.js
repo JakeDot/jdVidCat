@@ -385,6 +385,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  try {
+    const parsed = new URL(payload.startUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      sendResponse({ ok: false, error: "Invalid payload: startUrl must use http or https" });
+      return true;
+    }
+  } catch {
+    sendResponse({ ok: false, error: "Invalid payload: startUrl is not a valid URL" });
+    return true;
+  }
+
   (async () => {
     try {
       const result = await startDownloadFromTab(payload);
