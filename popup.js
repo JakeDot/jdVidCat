@@ -132,13 +132,17 @@ function loadHistory() {
         copyBtn.className = "history-item-copy-btn";
         copyBtn.textContent = "Copy URL";
         copyBtn.title = "Copy video URL to clipboard";
+        let copyResetTimer = null;
         copyBtn.addEventListener("click", () => {
           navigator.clipboard.writeText(entry.url).then(() => {
+            clearTimeout(copyResetTimer);
             copyBtn.textContent = "Copied!";
-            setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 1500);
-          }).catch(() => {
+            copyResetTimer = setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 1500);
+          }).catch((err) => {
+            console.error("Failed to copy URL to clipboard:", err);
+            clearTimeout(copyResetTimer);
             copyBtn.textContent = "Failed";
-            setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 1500);
+            copyResetTimer = setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 1500);
           });
         });
         item.appendChild(copyBtn);
