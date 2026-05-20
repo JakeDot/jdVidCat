@@ -126,6 +126,22 @@ function loadHistory() {
           browserLink.textContent = "Browser Download";
           item.appendChild(browserLink);
         }
+
+        // Add copy URL button
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "history-item-copy-btn";
+        copyBtn.textContent = "Copy URL";
+        copyBtn.title = "Copy video URL to clipboard";
+        copyBtn.addEventListener("click", () => {
+          navigator.clipboard.writeText(entry.url).then(() => {
+            copyBtn.textContent = "Copied!";
+            setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 1500);
+          }).catch(() => {
+            copyBtn.textContent = "Failed";
+            setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 1500);
+          });
+        });
+        item.appendChild(copyBtn);
         
         historyListNode.appendChild(item);
       });
