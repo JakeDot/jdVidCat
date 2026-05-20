@@ -411,6 +411,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
+/* istanbul ignore next */
+if (typeof module !== "undefined") {
+  module.exports = {
+    normalizeUrl,
+    toAbsolute,
+    extractVideoUrls,
+    extractVideoPreviewUrls,
+    extractPaginationUrls,
+    filenameFromUrl,
+    convertBlobToDataUrl,
+    getDownloadHistory,
+    addDownloadToHistory,
+    clearDownloadHistory,
+    startDownloadFromTab,
+    DEFAULT_MAX_DOWNLOADS,
+    MAX_DOWNLOADS_LIMIT,
+    MAX_HISTORY_ENTRIES,
+    FETCH_TIMEOUT_MS
+  };
+}
+
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id || !tab?.url) {
