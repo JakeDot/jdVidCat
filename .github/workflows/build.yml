@@ -73,11 +73,9 @@ jobs:
     name: Request ${{ matrix.reviewer.name }} Code Review
     runs-on: ubuntu-latest
     needs: validate-and-package
-    # Run when PR is marked ready for review and on subsequent pushes, skip draft PRs,
-    # skip if PR has [no-review] (global) in title, and skip fork PRs to avoid
-    # permission issues. Reviewer-specific skip tags ([no-gemini] etc.) are checked
-    # at step level because the matrix context is forbidden in job-level if conditions.
-    # Each matrix entry runs as an independent parallel subagent for its model.
+    # Trigger on PR ready-for-review and subsequent pushes; skip drafts, fork PRs,
+    # global [no-review] tag, and reviewer-specific skip tags checked at step level
+    # (matrix context is forbidden in job-level if conditions).
     if: |
       github.event_name == 'pull_request' &&
       contains(fromJson('["ready_for_review", "synchronize"]'), github.event.action) &&
@@ -92,21 +90,11 @@ jobs:
       matrix:
         reviewer:
           - name: Gemini
-            handle: "@gemini-code-assist"
-            marker: gemini-review-request
+            reviewer_login: "gemini-code-assist"
             skip_tag: "[no-gemini]"
           - name: Copilot
-            handle: "@copilot"
-            marker: copilot-review-request
+            reviewer_login: "copilot"
             skip_tag: "[no-copilot]"
-          - name: Claude
-            handle: "@claude"
-            marker: claude-review-request
-            skip_tag: "[no-claude]"
-          - name: Codex
-            handle: "@openai-codex"
-            marker: codex-review-request
-            skip_tag: "[no-codex]"
     steps:
       - name: Checkout (with submodule for composite action)
         uses: actions/checkout@v4
@@ -129,8 +117,7 @@ jobs:
         if: steps.skip-check.outputs.skip != 'true'
         uses: ./.github/actions/request-ai-review
         with:
-          reviewer-handle: ${{ matrix.reviewer.handle }}
-          reviewer-marker: ${{ matrix.reviewer.marker }}
+          reviewer-login: ${{ matrix.reviewer.reviewer_login }}
 
   bump-version-and-tag:
     name: Bump Version and Create Tag

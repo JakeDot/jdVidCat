@@ -1,18 +1,11 @@
 name: Request AI Code Review
 description: >
-  Post or update a deduplication-aware AI reviewer mention comment on a pull
-  request. Searches recent github-actions[bot] comments for a matching HTML
-  marker and updates in place instead of creating a new comment, preventing
-  review-request spam.
+  Request a code review from an AI reviewer bot via the GitHub reviewers API.
+  Skips gracefully if the reviewer is already assigned or the request fails.
 
 inputs:
-  reviewer-handle:
-    description: '@mention handle of the AI reviewer bot (e.g. "@gemini-code-assist")'
-    required: true
-  reviewer-marker:
-    description: >
-      Unique slug used as the HTML deduplication marker
-      (e.g. "gemini-review-request").
+  reviewer-login:
+    description: 'GitHub login of the AI reviewer bot (e.g. "gemini-code-assist")'
     required: true
   github-token:
     description: 'GitHub token with pull-requests:write permission.'
@@ -22,118 +15,27 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Post or update review-request comment
+    - name: Request reviewer via API
       uses: actions/github-script@v7
       env:
-        REVIEWER_HANDLE: ${{ inputs.reviewer-handle }}
-        REVIEWER_MARKER: ${{ inputs.reviewer-marker }}
+        REVIEWER_LOGIN: ${{ inputs.reviewer-login }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const REVIEW_MARKER = `<!-- jdcatvid:${process.env.REVIEWER_MARKER} -->`;
-          const GITHUB_ACTIONS_BOT_LOGIN = 'github-actions[bot]';
-          const reviewerHandle = process.env.REVIEWER_HANDLE;
+          const reviewerLogin = process.env.REVIEWER_LOGIN;
 
-          if (!reviewerHandle) {
-            throw new Error('REVIEWER_HANDLE env var must not be empty');
-          }
-          if (!process.env.REVIEWER_MARKER) {
-            throw new Error('REVIEWER_MARKER env var must not be empty');
+          if (!reviewerLogin) {
+            throw new Error('REVIEWER_LOGIN env var must not be empty');
           }
 
-          const DEFAULT_MESSAGE = [
-            `${reviewerHandle} please review this pull request.`,
-            '',
-            'Focus areas:',
-            '- Correctness and regressions',
-            '- Edge cases and error handling',
-            '- Security risks and dependency/workflow safety',
-            '- Readability and maintainability',
-            '',
-            'If possible, suggest actionable diff-style fixes.'
-          ].join('\n');
-          const MAX_COMMENT_LENGTH = 4000;
-          const prefix = `${REVIEW_MARKER}\n`;
-          const body = prefix + DEFAULT_MESSAGE.slice(0, MAX_COMMENT_LENGTH - prefix.length);
-
-          let existingCommentNode = null;
-          let beforeCursor = null;
-          const COMMENT_PAGE_SIZE = 20;
-          // Search the most recent comments first, then page backward through older ones
-          // (up to 60 total comments: 3 pages x 20) to balance reliability and API cost.
-          const MAX_COMMENT_PAGES = 3;
-
-          for (let i = 0; i < MAX_COMMENT_PAGES && !existingCommentNode; i++) {
-            const recentComments = await github.graphql(
-              `
-                query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String, $pageSize: Int!) {
-                  repository(owner: $owner, name: $repo) {
-                    pullRequest(number: $issueNumber) {
-                      comments(last: $pageSize, before: $before) {
-                        nodes {
-                          id
-                          databaseId
-                          body
-                          author {
-                            login
-                          }
-                        }
-                        pageInfo {
-                          hasPreviousPage
-                          startCursor
-                        }
-                      }
-                    }
-                  }
-                }
-              `,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issueNumber: context.issue.number,
-                before: beforeCursor,
-                pageSize: COMMENT_PAGE_SIZE
-              }
-            );
-
-            const commentsConnection = recentComments?.repository?.pullRequest?.comments;
-            const commentNodes = commentsConnection?.nodes;
-            if (!Array.isArray(commentNodes)) {
-              const hasRepository = Boolean(recentComments?.repository);
-              const hasPullRequest = Boolean(recentComments?.repository?.pullRequest);
-              throw new Error(
-                `Failed to load PR comments for ${reviewerHandle} review request deduplication: ` +
-                `expected commentNodes to be an array but received ${typeof commentNodes} ` +
-                `(page: ${i + 1}, hasRepository: ${hasRepository}, hasPullRequest: ${hasPullRequest}).`
-              );
-            }
-
-            existingCommentNode = commentNodes.find(
-              (comment) =>
-                comment?.author?.login === GITHUB_ACTIONS_BOT_LOGIN &&
-                comment?.body?.includes(REVIEW_MARKER)
-            );
-
-            if (existingCommentNode || !commentsConnection?.pageInfo?.hasPreviousPage) {
-              break;
-            }
-
-            beforeCursor = commentsConnection.pageInfo.startCursor;
-          }
-
-          if (existingCommentNode) {
-            await github.rest.issues.updateComment({
-              comment_id: existingCommentNode.databaseId,
+          try {
+            await github.rest.pulls.requestReviewers({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body
+              pull_number: context.issue.number,
+              reviewers: [reviewerLogin],
             });
-            return;
+            core.info(`Requested review from ${reviewerLogin} via API.`);
+          } catch (err) {
+            core.warning(`API review request for ${reviewerLogin} failed: ${err.message}`);
           }
-
-          await github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body
-          });
