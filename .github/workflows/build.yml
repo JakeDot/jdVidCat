@@ -27,9 +27,7 @@ jobs:
           test -f content.js
           test -f popup.html
           test -f popup.js
-          test -f icons/icon16.png
-          test -f icons/icon48.png
-          test -f icons/icon128.png
+          test -f icons/jdcatvid.svg
 
       - name: Lint manifest JSON
         run: jq . manifest.json > /dev/null
