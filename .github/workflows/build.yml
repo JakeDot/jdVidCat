@@ -94,21 +94,25 @@ jobs:
             marker: gemini-review-request
             skip_tag: "[no-gemini]"
             reviewer_login: "gemini-code-assist"
+            response_bot_login: "gemini-code-assist[bot]"
           - name: Copilot
             handle: "@copilot"
             marker: copilot-review-request
             skip_tag: "[no-copilot]"
             reviewer_login: "copilot"
+            response_bot_login: "copilot-pull-request-reviewer[bot]"
           - name: Claude
             handle: "@claude"
             marker: claude-review-request
             skip_tag: "[no-claude]"
             reviewer_login: ""
+            response_bot_login: ""
           - name: Codex
             handle: "@openai-codex"
             marker: codex-review-request
             skip_tag: "[no-codex]"
             reviewer_login: ""
+            response_bot_login: ""
     steps:
       - name: Post ${{ matrix.reviewer.name }} code review request
         if: "!contains(github.event.pull_request.title, matrix.reviewer.skip_tag)"
