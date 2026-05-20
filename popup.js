@@ -6,6 +6,8 @@ const historyListNode = document.getElementById("historyList");
 
 const MAX_PATHNAME_LENGTH = 50;
 const MAX_URL_DISPLAY_LENGTH = 60;
+const COPY_FEEDBACK_DURATION_MS = 1500;
+const copyTimers = new WeakMap();
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabContents = document.querySelectorAll(".tab-content");
 
@@ -36,6 +38,13 @@ chrome.storage.sync.get(["maxDownloads"], ({ maxDownloads }) => {
 
 function setStatus(text) {
   statusNode.textContent = text;
+}
+
+function setCopyButtonFeedback(btn, label) {
+  const originalLabel = btn.dataset.originalLabel || "Copy URL";
+  clearTimeout(copyTimers.get(btn));
+  btn.textContent = label;
+  copyTimers.set(btn, setTimeout(() => { btn.textContent = originalLabel; }, COPY_FEEDBACK_DURATION_MS));
 }
 
 function buildJDownloaderLink(url) {
@@ -126,6 +135,37 @@ function loadHistory() {
           browserLink.textContent = "Browser Download";
           item.appendChild(browserLink);
         }
+
+        // Add copy URL button
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "history-item-copy-btn";
+        copyBtn.textContent = "Copy URL";
+        copyBtn.dataset.originalLabel = "Copy URL";
+        copyBtn.title = "Copy video URL to clipboard";
+        copyBtn.addEventListener("click", () => {
+          clearTimeout(copyTimers.get(copyBtn));
+          if (typeof navigator.clipboard?.writeText !== "function") {
+            setCopyButtonFeedback(copyBtn, "Failed");
+            return;
+          }
+
+          let writePromise;
+          try {
+            writePromise = navigator.clipboard.writeText(entry.url);
+          } catch (err) {
+            console.error("Failed to copy URL to clipboard:", err);
+            setCopyButtonFeedback(copyBtn, "Failed");
+            return;
+          }
+
+          writePromise.then(() => {
+            setCopyButtonFeedback(copyBtn, "Copied!");
+          }).catch((err) => {
+            console.error("Failed to copy URL to clipboard:", err);
+            setCopyButtonFeedback(copyBtn, "Failed");
+          });
+        });
+        item.appendChild(copyBtn);
         
         historyListNode.appendChild(item);
       });
