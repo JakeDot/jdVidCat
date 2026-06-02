@@ -11,7 +11,7 @@ jobs:
       github.event.comment.user.login == 'gemini-code-assist[bot]' &&
       github.event.comment.user.type == 'Bot' &&
       github.event.repository.full_name == github.repository
-    uses: JakeDot/jd-ai-review-action/.github/workflows/gemini-auto-fix.yml@main
+    uses: JakeDot/jd-ai-review-action/.github/workflows/gemini-auto-fix.yml@v1
     permissions:
       contents: write
       pull-requests: write

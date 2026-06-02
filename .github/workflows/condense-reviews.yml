@@ -16,7 +16,7 @@ jobs:
       github.event.issue.pull_request &&
       (github.event.comment.user.login == 'copilot-pull-request-reviewer[bot]' ||
       github.event.comment.user.login == 'gemini-code-assist[bot]'))
-    uses: JakeDot/jd-ai-review-action/.github/workflows/condense-reviews.yml@main
+    uses: JakeDot/jd-ai-review-action/.github/workflows/condense-reviews.yml@v1
     permissions:
       pull-requests: write
       issues: write
