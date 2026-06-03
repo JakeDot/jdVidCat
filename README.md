@@ -24,9 +24,9 @@ JakeDot Video Category Downloader
 ### Build artifacts
 
 A GitHub Actions workflow in `.github/workflows/build.yml` validates the extension files and creates three distribution formats:
-- `jdCatVid.zip` - Generic extension package
-- `jdCatVid.xpi` - Firefox add-on format
-- `jdCatVid-chrome.zip` - Chrome extension format
+- `jdVidCat.zip` - Generic extension package
+- `jdVidCat.xpi` - Firefox add-on format
+- `jdVidCat-chrome.zip` - Chrome extension format
 
 ### Release workflow
 

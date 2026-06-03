@@ -45,29 +45,29 @@ jobs:
           FILES=(manifest.json background.js content.js popup.html popup.js icons)
 
           # Create base ZIP (generic)
-          zip -r dist/jdCatVid.zip "${FILES[@]}"
-          # Create XPI for Firefox (same content, different extension)
-          cp dist/jdCatVid.zip dist/jdCatVid.xpi
+          zip -r dist/jdVidCat.zip "${FILES[@]}"
+          # Create XPI for Firefox
+          zip -r dist/jdVidCat.xpi "${FILES[@]}"
           # Create Chrome extension (same content)
-          cp dist/jdCatVid.zip dist/jdCatVid-chrome.zip
+          cp dist/jdVidCat.zip dist/jdVidCat-chrome.zip
 
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jdCatVid-zip
-          path: dist/jdCatVid.zip
+          name: jdVidCat-zip
+          path: dist/jdVidCat.zip
 
       - name: Upload XPI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jdCatVid-xpi
-          path: dist/jdCatVid.xpi
+          name: jdVidCat-xpi
+          path: dist/jdVidCat.xpi
 
       - name: Upload Chrome artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jdCatVid-chrome
-          path: dist/jdCatVid-chrome.zip
+          name: jdVidCat-chrome
+          path: dist/jdVidCat-chrome.zip
 
   request-ai-reviews:
     name: Request AI Code Reviews
@@ -257,7 +257,7 @@ jobs:
         if: steps.check_chrome_secrets.outputs.publish_enabled == 'true'
         uses: actions/download-artifact@v4
         with:
-          name: jdCatVid-chrome
+          name: jdVidCat-chrome
           path: dist
 
       - name: Upload and publish to Chrome Web Store
@@ -270,7 +270,7 @@ jobs:
           client_id: ${{ secrets.CHROME_CLIENT_ID }}
           client_secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           refresh_token: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          zip_file: dist/jdCatVid-chrome.zip
+          zip_file: dist/jdVidCat-chrome.zip
 
   publish-github-package:
     name: Publish GitHub Package Assets
@@ -288,27 +288,27 @@ jobs:
       - name: Download Firefox XPI artifact
         uses: actions/download-artifact@v4
         with:
-          name: jdCatVid-xpi
+          name: jdVidCat-xpi
           path: dist
 
       - name: Download Chromium ZIP artifact
         uses: actions/download-artifact@v4
         with:
-          name: jdCatVid-chrome
+          name: jdVidCat-chrome
           path: dist
 
       - name: Build Source Code ZIP
         run: |
           mkdir -p dist
-          git archive --format=zip --output dist/jdCatVid-source.zip HEAD
+          git archive --format=zip --output dist/jdVidCat-source.zip HEAD
 
       - name: Upload release package assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/jdCatVid.xpi
-            dist/jdCatVid-chrome.zip
-            dist/jdCatVid-source.zip
+            dist/jdVidCat.xpi
+            dist/jdVidCat-chrome.zip
+            dist/jdVidCat-source.zip
           fail_on_unmatched_files: true
 
   publish-firefox-amo:
@@ -351,10 +351,10 @@ jobs:
           rm -rf /tmp/firefox-src
           mkdir -p /tmp/firefox-src
 
-          # Find the Firefox XPI artifact (in jdCatVid-xpi artifact directory)
-          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts/jdCatVid-xpi -type f \( -name '*.xpi' -o -name '*.zip' \) 2>/dev/null)
+          # Find the Firefox XPI artifact (in jdVidCat-xpi artifact directory)
+          mapfile -t firefox_zip_candidates < <(find /tmp/packaged-artifacts/jdVidCat-xpi -type f \( -name '*.xpi' -o -name '*.zip' \) 2>/dev/null)
           if [ "${#firefox_zip_candidates[@]}" -ne 1 ]; then
-            echo "Expected exactly one Firefox artifact in jdCatVid-xpi directory, found ${#firefox_zip_candidates[@]}."
+            echo "Expected exactly one Firefox artifact in jdVidCat-xpi directory, found ${#firefox_zip_candidates[@]}."
             find /tmp/packaged-artifacts -type f \( -name '*.zip' -o -name '*.xpi' \) -print
             exit 1
           fi

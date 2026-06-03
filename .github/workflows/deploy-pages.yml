@@ -87,7 +87,7 @@ jobs:
             find artifacts -type f \( -name "*.xpi" -o -name "*.zip" \) -print0 | while IFS= read -r -d '' file; do
               filename=$(basename "$file")
               # Validate filename contains only expected patterns (prevent path traversal)
-              if echo "$filename" | grep -qE '^jdCatVid[a-zA-Z0-9._-]*\.(xpi|zip)$'; then
+              if echo "$filename" | grep -qE '^jdVidCat[a-zA-Z0-9._-]*\.(xpi|zip)$'; then
                 cp "$file" "public/downloads/$filename"
                 echo "Copied: $filename"
               else
@@ -101,19 +101,19 @@ jobs:
           CHROME_EXISTS=false
           GENERIC_EXISTS=false
           
-          if [ -f public/downloads/jdCatVid.xpi ]; then
+          if [ -f public/downloads/jdVidCat.xpi ]; then
             XPI_EXISTS=true
-            echo "✓ Found jdCatVid.xpi"
+            echo "✓ Found jdVidCat.xpi"
           fi
           
-          if [ -f public/downloads/jdCatVid-chrome.zip ]; then
+          if [ -f public/downloads/jdVidCat-chrome.zip ]; then
             CHROME_EXISTS=true
-            echo "✓ Found jdCatVid-chrome.zip"
+            echo "✓ Found jdVidCat-chrome.zip"
           fi
           
-          if [ -f public/downloads/jdCatVid.zip ]; then
+          if [ -f public/downloads/jdVidCat.zip ]; then
             GENERIC_EXISTS=true
-            echo "✓ Found jdCatVid.zip"
+            echo "✓ Found jdVidCat.zip"
           fi
           
           # Store artifact availability for use in HTML
@@ -300,17 +300,17 @@ jobs:
                   <div class="download-card" id="firefox-card" style="display: none;">
                     <h3>Firefox</h3>
                     <p>For Mozilla Firefox</p>
-                    <a href="./downloads/jdCatVid.xpi" class="download-btn" download>Download XPI</a>
+                    <a href="./downloads/jdVidCat.xpi" class="download-btn" download>Download XPI</a>
                   </div>
                   <div class="download-card" id="chrome-card" style="display: none;">
                     <h3>Chrome/Chromium</h3>
                     <p>For Chrome, Edge, Brave, and other Chromium-based browsers</p>
-                    <a href="./downloads/jdCatVid-chrome.zip" class="download-btn" download>Download ZIP</a>
+                    <a href="./downloads/jdVidCat-chrome.zip" class="download-btn" download>Download ZIP</a>
                   </div>
                   <div class="download-card" id="generic-card" style="display: none;">
                     <h3>Generic</h3>
                     <p>Generic package for any browser</p>
-                    <a href="./downloads/jdCatVid.zip" class="download-btn" download>Download ZIP</a>
+                    <a href="./downloads/jdVidCat.zip" class="download-btn" download>Download ZIP</a>
                   </div>
                   <div id="no-artifacts" class="download-card" style="display: none;">
                     <p style="color: #999; margin: 0;">Build artifacts are being generated or are temporarily unavailable. This may happen if the latest build on main failed or is still in progress. Please refresh this page in a moment, or clone the repository directly from GitHub.</p>
@@ -324,7 +324,7 @@ jobs:
                 <h3 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">Firefox</h3>
                 <div class="info-box">
                   <ol style="margin-left: 20px;">
-                    <li>Download the <code>jdCatVid.xpi</code> file above</li>
+                    <li>Download the <code>jdVidCat.xpi</code> file above</li>
                     <li>Open Firefox and go to <code>about:addons</code></li>
                     <li>Click the gear icon and select "Install add-on from file..."</li>
                     <li>Select the downloaded XPI file</li>
@@ -334,7 +334,7 @@ jobs:
                 <h3 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">Chrome/Chromium (Developer Mode)</h3>
                 <div class="info-box">
                   <ol style="margin-left: 20px;">
-                    <li>Download and extract the <code>jdCatVid-chrome.zip</code> file</li>
+                    <li>Download and extract the <code>jdVidCat-chrome.zip</code> file</li>
                     <li>Open Chrome and go to <code>chrome://extensions</code></li>
                     <li>Enable <strong>Developer mode</strong> (top right toggle)</li>
                     <li>Click <strong>Load unpacked</strong></li>
@@ -373,9 +373,9 @@ jobs:
               // Dynamically check which artifacts are available and show/hide cards
               async function checkArtifacts() {
                 const artifacts = {
-                  firefox: { card: 'firefox-card', url: './downloads/jdCatVid.xpi' },
-                  chrome: { card: 'chrome-card', url: './downloads/jdCatVid-chrome.zip' },
-                  generic: { card: 'generic-card', url: './downloads/jdCatVid.zip' }
+                  firefox: { card: 'firefox-card', url: './downloads/jdVidCat.xpi' },
+                  chrome: { card: 'chrome-card', url: './downloads/jdVidCat-chrome.zip' },
+                  generic: { card: 'generic-card', url: './downloads/jdVidCat.zip' }
                 };
                 
                 // Check all artifacts in parallel for better performance

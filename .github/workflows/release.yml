@@ -138,11 +138,11 @@ jobs:
           FILES=(manifest.json background.js content.js popup.html popup.js icons)
 
           # Create base ZIP (generic)
-          zip -r dist/jdCatVid.zip "${FILES[@]}"
-          # Create XPI for Firefox (same content, different extension)
-          cp dist/jdCatVid.zip dist/jdCatVid.xpi
+          zip -r dist/jdVidCat.zip "${FILES[@]}"
+          # Create XPI for Firefox
+          zip -r dist/jdVidCat.xpi "${FILES[@]}"
           # Create Chrome extension (same content)
-          cp dist/jdCatVid.zip dist/jdCatVid-chrome.zip
+          cp dist/jdVidCat.zip dist/jdVidCat-chrome.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -153,6 +153,6 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            dist/jdCatVid.xpi
-            dist/jdCatVid-chrome.zip
+            dist/jdVidCat.xpi
+            dist/jdVidCat-chrome.zip
           fail_on_unmatched_files: true
