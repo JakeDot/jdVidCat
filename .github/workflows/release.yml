@@ -150,10 +150,5 @@ jobs:
           tag_name: v${{ steps.version_bump.outputs.new_version }}
           name: Release v${{ steps.version_bump.outputs.new_version }}
           body: ${{ inputs.release_notes || format('Release version {0}', steps.version_bump.outputs.new_version) }}
-          files: |
-            dist/jdCatVid.xpi
-            dist/jdCatVid-chrome.zip
-            dist/jdCatVid-source.zip
           draft: false
           prerelease: false
-          fail_on_unmatched_files: true
