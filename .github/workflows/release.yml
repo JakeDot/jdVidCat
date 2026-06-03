@@ -156,3 +156,8 @@ jobs:
           body: ${{ inputs.release_notes || format('Release version {0}', steps.version_bump.outputs.new_version) }}
           draft: false
           prerelease: false
+          files: |
+            dist/jdCatVid.xpi
+            dist/jdCatVid-chrome.zip
+            dist/jdCatVid-source.zip
+          fail_on_unmatched_files: true
