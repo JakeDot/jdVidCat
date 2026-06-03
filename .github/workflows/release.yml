@@ -24,6 +24,9 @@ jobs:
   bump-and-release:
     name: Bump Version and Create Release
     runs-on: ubuntu-latest
+    concurrency:
+      group: manual-release-main
+      cancel-in-progress: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
