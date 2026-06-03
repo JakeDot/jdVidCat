@@ -1,12 +1,12 @@
-# jdCatVid
+# jdVidCat
 
-<img alt="logo" src="https://raw.githubusercontent.com/JakeDot/jdVidCat/refs/heads/main/icons/jdcatvid.svg" />
+<img alt="logo" src="https://raw.githubusercontent.com/JakeDot/jdVidCat/refs/heads/main/icons/jdVidCat.svg" />
 
 JakeDot Video Category Downloader
 
-## jdCatVid browser extension
+## jdVidCat browser extension
 
-`jdCatVid` is a Manifest V3 browser extension that:
+`jdVidCat` is a Manifest V3 browser extension that:
 
 - Starts from the **current tab URL**.
 - Crawls category/tag pages with pagination.
@@ -19,7 +19,7 @@ JakeDot Video Category Downloader
 1. Open Chromium-based browser extensions page (`chrome://extensions`).
 2. Enable **Developer mode**.
 3. Select **Load unpacked** and choose this repository folder.
-4. Open a category/tag page and click the `jdCatVid` extension popup button.
+4. Open a category/tag page and click the `jdVidCat` extension popup button.
 
 ### Build artifacts
 
