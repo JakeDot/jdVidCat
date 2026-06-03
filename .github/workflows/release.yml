@@ -144,10 +144,6 @@ jobs:
           # Create Chrome extension (same content)
           cp dist/jdCatVid.zip dist/jdCatVid-chrome.zip
 
-      - name: Build Source Code ZIP
-        run: |
-          git archive --format=zip --output dist/jdCatVid-source.zip HEAD
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -156,3 +152,7 @@ jobs:
           body: ${{ inputs.release_notes || format('Release version {0}', steps.version_bump.outputs.new_version) }}
           draft: false
           prerelease: false
+          files: |
+            dist/jdCatVid.xpi
+            dist/jdCatVid-chrome.zip
+          fail_on_unmatched_files: true
