@@ -1,0 +1,159 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: 'patch'
+      release_notes:
+        description: 'Release notes (optional)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  bump-and-release:
+    name: Bump Version and Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version and create tag
+        id: version_bump
+        run: |
+          # Get current version from manifest.json
+          CURRENT_VERSION=$(jq -r '.version' manifest.json) || {
+            echo "Error: Failed to read version from manifest.json"
+            exit 1
+          }
+          echo "Current version: $CURRENT_VERSION"
+
+          # Validate version format (must be MAJOR.MINOR.PATCH)
+          if ! [[ $CURRENT_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Version '$CURRENT_VERSION' is not in MAJOR.MINOR.PATCH format"
+            exit 1
+          fi
+
+          # Parse version components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+          # Validate that all components were parsed correctly
+          if [ -z "$MAJOR" ] || [ -z "$MINOR" ] || [ -z "$PATCH" ]; then
+            echo "Error: Failed to parse version components"
+            exit 1
+          fi
+
+          # Bump version based on input
+          case "${{ inputs.bump_type }}" in
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            *)
+              echo "Error: Invalid bump type '${{ inputs.bump_type }}'"
+              exit 1
+              ;;
+          esac
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "New version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+          # Check if tag already exists
+          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Error: Tag v$NEW_VERSION already exists"
+            exit 1
+          fi
+
+          # Update manifest.json with new version using mktemp for safety
+          TEMP_FILE=$(mktemp) || {
+            echo "Error: Failed to create temporary file"
+            exit 1
+          }
+          trap 'rm -f "$TEMP_FILE"' EXIT
+
+          jq ".version = \"$NEW_VERSION\"" manifest.json > "$TEMP_FILE" || {
+            echo "Error: Failed to update manifest.json"
+            exit 1
+          }
+          mv "$TEMP_FILE" manifest.json || {
+            echo "Error: Failed to replace manifest.json"
+            exit 1
+          }
+
+          # Commit and tag
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "Release version $NEW_VERSION" || {
+            echo "Error: Failed to commit version bump"
+            exit 1
+          }
+          git tag -a "v$NEW_VERSION" -m "Release version $NEW_VERSION" || {
+            echo "Error: Failed to create tag"
+            exit 1
+          }
+
+          # Push changes and tag
+          git push origin main || {
+            echo "Error: Failed to push main branch"
+            exit 1
+          }
+          git push origin "v$NEW_VERSION" || {
+            echo "Error: Failed to push tag"
+            exit 1
+          }
+
+          echo "Successfully created version $NEW_VERSION"
+
+      - name: Build extension artifacts
+        run: |
+          mkdir -p dist
+          # Define files to include in all packages
+          FILES=(manifest.json background.js content.js popup.html popup.js icons)
+
+          # Create base ZIP (generic)
+          zip -r dist/jdCatVid.zip "${FILES[@]}"
+          # Create XPI for Firefox (same content, different extension)
+          cp dist/jdCatVid.zip dist/jdCatVid.xpi
+          # Create Chrome extension (same content)
+          cp dist/jdCatVid.zip dist/jdCatVid-chrome.zip
+
+      - name: Build Source Code ZIP
+        run: |
+          git archive --format=zip --output dist/jdCatVid-source.zip HEAD
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version_bump.outputs.new_version }}
+          name: Release v${{ steps.version_bump.outputs.new_version }}
+          body: ${{ inputs.release_notes || format('Release version {0}', steps.version_bump.outputs.new_version) }}
+          files: |
+            dist/jdCatVid.xpi
+            dist/jdCatVid-chrome.zip
+            dist/jdCatVid-source.zip
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
