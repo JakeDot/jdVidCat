@@ -137,12 +137,10 @@ jobs:
           # Define files to include in all packages
           FILES=(manifest.json background.js content.js popup.html popup.js icons)
 
-          # Create base ZIP (generic)
-          zip -r dist/jdVidCat.zip "${FILES[@]}"
           # Create XPI for Firefox
           zip -r dist/jdVidCat.xpi "${FILES[@]}"
-          # Create Chrome extension (same content)
-          cp dist/jdVidCat.zip dist/jdVidCat-chrome.zip
+          # Create Chrome extension
+          zip -r dist/jdVidCat-chrome.zip "${FILES[@]}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
