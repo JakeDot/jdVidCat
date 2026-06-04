@@ -1,6 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "jdCatVid",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "jdvidcat@jakedot.net",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "name": "jdVidCat",
   "version": "0.1.7",
   "description": "Download videos from category/tag pages with pagination crawl and blob URL support.",
   "permissions": [
@@ -15,7 +25,7 @@
     "<all_urls>"
   ],
   "action": {
-    "default_title": "jdCatVid",
+    "default_title": "jdVidCat",
     "default_popup": "popup.html"
   },
   "background": {
@@ -33,8 +43,8 @@
     }
   ],
   "icons": {
-    "16": "icons/jdcatvid.svg",
-    "48": "icons/jdcatvid.svg",
-    "128": "icons/jdcatvid.svg"
+    "16": "icons/jdVidCat.svg",
+    "48": "icons/jdVidCat.svg",
+    "128": "icons/jdVidCat.svg"
   }
 }

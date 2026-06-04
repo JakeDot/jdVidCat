@@ -348,42 +348,42 @@ describe("extractPaginationUrls", () => {
 // ── filenameFromUrl ───────────────────────────────────────────────────────────
 describe("filenameFromUrl", () => {
   test("extracts filename and prefixes with padded index", () => {
-    expect(filenameFromUrl("https://example.com/path/video.mp4", 0)).toBe("jdCatVid/001-video.mp4");
+    expect(filenameFromUrl("https://example.com/path/video.mp4", 0)).toBe("jdVidCat/001-video.mp4");
   });
 
   test("pads single-digit index to 3 digits", () => {
-    expect(filenameFromUrl("https://example.com/vid.mp4", 9)).toBe("jdCatVid/010-vid.mp4");
+    expect(filenameFromUrl("https://example.com/vid.mp4", 9)).toBe("jdVidCat/010-vid.mp4");
   });
 
   test("pads two-digit index to 3 digits", () => {
-    expect(filenameFromUrl("https://example.com/vid.mp4", 99)).toBe("jdCatVid/100-vid.mp4");
+    expect(filenameFromUrl("https://example.com/vid.mp4", 99)).toBe("jdVidCat/100-vid.mp4");
   });
 
   test("falls back to video-1.mp4 when URL path has no filename", () => {
     const result = filenameFromUrl("https://example.com/", 0);
-    expect(result).toBe("jdCatVid/001-video-1.mp4");
+    expect(result).toBe("jdVidCat/001-video-1.mp4");
   });
 
   test("replaces special characters in filename with dashes", () => {
     const result = filenameFromUrl("https://example.com/my%20video!.mp4", 0);
     expect(result).not.toContain(" ");
     expect(result).not.toContain("!");
-    expect(result).toMatch(/^jdCatVid\/001-/);
+    expect(result).toMatch(/^jdVidCat\/001-/);
   });
 
   test("truncates filename portion at 200 characters", () => {
     const longName = "a".repeat(250) + ".mp4";
     const result = filenameFromUrl(`https://example.com/${longName}`, 0);
-    const filenamePart = result.replace("jdCatVid/001-", "");
+    const filenamePart = result.replace("jdVidCat/001-", "");
     expect(filenamePart.length).toBeLessThanOrEqual(200);
   });
 
   test("uses default mp4 extensionFallback for invalid URL", () => {
-    expect(filenameFromUrl("not-a-url", 0)).toBe("jdCatVid/001-video.mp4");
+    expect(filenameFromUrl("not-a-url", 0)).toBe("jdVidCat/001-video.mp4");
   });
 
   test("uses custom extensionFallback for invalid URL", () => {
-    expect(filenameFromUrl("not-a-url", 0, "webm")).toBe("jdCatVid/001-video.webm");
+    expect(filenameFromUrl("not-a-url", 0, "webm")).toBe("jdVidCat/001-video.webm");
   });
 });
 
@@ -398,7 +398,7 @@ describe("getDownloadHistory", () => {
     const entry = {
       id: "abc",
       url: "https://example.com/v.mp4",
-      filename: "jdCatVid/001-v.mp4",
+      filename: "jdVidCat/001-v.mp4",
       timestamp: new Date().toISOString()
     };
     mockLocalStorage.downloadHistory = [entry];
@@ -408,8 +408,8 @@ describe("getDownloadHistory", () => {
 
   test("returns multiple entries in order", async () => {
     const entries = [
-      { id: "1", url: "https://example.com/a.mp4", filename: "jdCatVid/001-a.mp4", timestamp: "" },
-      { id: "2", url: "https://example.com/b.mp4", filename: "jdCatVid/002-b.mp4", timestamp: "" }
+      { id: "1", url: "https://example.com/a.mp4", filename: "jdVidCat/001-a.mp4", timestamp: "" },
+      { id: "2", url: "https://example.com/b.mp4", filename: "jdVidCat/002-b.mp4", timestamp: "" }
     ];
     mockLocalStorage.downloadHistory = entries;
     const history = await getDownloadHistory();
@@ -422,10 +422,10 @@ describe("getDownloadHistory", () => {
 // ── addDownloadToHistory ──────────────────────────────────────────────────────
 describe("addDownloadToHistory", () => {
   test("returns an entry with all required fields", async () => {
-    const entry = await addDownloadToHistory("https://example.com/video.mp4", "jdCatVid/001-video.mp4");
+    const entry = await addDownloadToHistory("https://example.com/video.mp4", "jdVidCat/001-video.mp4");
     expect(entry).toMatchObject({
       url: "https://example.com/video.mp4",
-      filename: "jdCatVid/001-video.mp4"
+      filename: "jdVidCat/001-video.mp4"
     });
     expect(typeof entry.id).toBe("string");
     expect(entry.id.length).toBeGreaterThan(0);
@@ -433,7 +433,7 @@ describe("addDownloadToHistory", () => {
   });
 
   test("persists the entry to chrome.storage.local", async () => {
-    await addDownloadToHistory("https://example.com/video.mp4", "jdCatVid/001-video.mp4");
+    await addDownloadToHistory("https://example.com/video.mp4", "jdVidCat/001-video.mp4");
     const history = await getDownloadHistory();
     expect(history).toHaveLength(1);
     expect(history[0].url).toBe("https://example.com/video.mp4");
@@ -441,9 +441,9 @@ describe("addDownloadToHistory", () => {
 
   test("appends to existing history", async () => {
     mockLocalStorage.downloadHistory = [
-      { id: "1", url: "https://example.com/old.mp4", filename: "jdCatVid/001-old.mp4", timestamp: "" }
+      { id: "1", url: "https://example.com/old.mp4", filename: "jdVidCat/001-old.mp4", timestamp: "" }
     ];
-    await addDownloadToHistory("https://example.com/new.mp4", "jdCatVid/002-new.mp4");
+    await addDownloadToHistory("https://example.com/new.mp4", "jdVidCat/002-new.mp4");
     const history = await getDownloadHistory();
     expect(history).toHaveLength(2);
   });
@@ -452,19 +452,19 @@ describe("addDownloadToHistory", () => {
     mockLocalStorage.downloadHistory = Array.from({ length: MAX_HISTORY_ENTRIES }, (_, i) => ({
       id: String(i),
       url: `https://example.com/video-${i}.mp4`,
-      filename: `jdCatVid/${i}-video.mp4`,
+      filename: `jdVidCat/${i}-video.mp4`,
       timestamp: ""
     }));
-    await addDownloadToHistory("https://example.com/new.mp4", "jdCatVid/001-new.mp4");
+    await addDownloadToHistory("https://example.com/new.mp4", "jdVidCat/001-new.mp4");
     const history = await getDownloadHistory();
     expect(history).toHaveLength(MAX_HISTORY_ENTRIES);
     expect(history[history.length - 1].url).toBe("https://example.com/new.mp4");
   });
 
   test("sends history-updated message to runtime after adding", async () => {
-    await addDownloadToHistory("https://example.com/video.mp4", "jdCatVid/001-video.mp4");
+    await addDownloadToHistory("https://example.com/video.mp4", "jdVidCat/001-video.mp4");
     expect(mockChrome.runtime.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "jdcatvid:history-updated" })
+      expect.objectContaining({ type: "jdVidCat:history-updated" })
     );
   });
 

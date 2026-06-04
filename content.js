@@ -5,7 +5,7 @@
   // host-page scripts cannot replace or clear the array while the background
   // script can still read the live data via executeScript.
   let cachedArray = [];
-  Object.defineProperty(window, "__jdCatVidBlobUrls", {
+  Object.defineProperty(window, "__jdVidCatBlobUrls", {
     get() {
       return cachedArray;
     },

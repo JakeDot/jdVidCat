@@ -27,7 +27,7 @@ jobs:
           test -f content.js
           test -f popup.html
           test -f popup.js
-          test -f icons/jdcatvid.svg
+          test -f icons/jdVidCat.svg
 
       - name: Lint manifest JSON
         run: jq . manifest.json > /dev/null
@@ -41,21 +41,23 @@ jobs:
       - name: Build extension artifacts
         run: |
           mkdir -p dist
-          # Define files to include in all packages
-          FILES=(manifest.json background.js content.js popup.html popup.js icons)
 
-          # Create base ZIP (generic)
-          zip -r dist/jdVidCat.zip "${FILES[@]}"
-          # Create XPI for Firefox
-          zip -r dist/jdVidCat.xpi "${FILES[@]}"
-          # Create Chrome extension (same content)
-          cp dist/jdVidCat.zip dist/jdVidCat-chrome.zip
+          # Create Chrome extension (Chrome MV3-compliant: service_worker only)
+          zip -r dist/jdVidCat-chrome.zip manifest.json background.js content.js popup.html popup.js icons
 
-      - name: Upload ZIP artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: jdVidCat-zip
-          path: dist/jdVidCat.zip
+          # Generate Firefox-specific manifest: replace service_worker with scripts fallback
+          jq '.background |= (del(.service_worker) | .scripts = ["background.js"])' manifest.json > dist/manifest-firefox.json \
+            || { echo "::error::Firefox manifest generation failed"; exit 1; }
+          jq . dist/manifest-firefox.json > /dev/null \
+            || { echo "::error::Firefox manifest is not valid JSON"; exit 1; }
+
+          # Create XPI for Firefox using the Firefox-specific manifest in a staging directory
+          mkdir -p dist/firefox-stage
+          cp background.js content.js popup.html popup.js dist/firefox-stage/
+          cp -r icons dist/firefox-stage/
+          cp dist/manifest-firefox.json dist/firefox-stage/manifest.json
+          (cd dist/firefox-stage && zip -r ../jdVidCat.xpi .)
+          rm -rf dist/firefox-stage
 
       - name: Upload XPI artifact
         uses: actions/upload-artifact@v4
@@ -297,18 +299,12 @@ jobs:
           name: jdVidCat-chrome
           path: dist
 
-      - name: Build Source Code ZIP
-        run: |
-          mkdir -p dist
-          git archive --format=zip --output dist/jdVidCat-source.zip HEAD
-
       - name: Upload release package assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/jdVidCat.xpi
             dist/jdVidCat-chrome.zip
-            dist/jdVidCat-source.zip
           fail_on_unmatched_files: true
 
   publish-firefox-amo:

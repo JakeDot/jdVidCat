@@ -122,9 +122,9 @@ function filenameFromUrl(url, index, extensionFallback = "mp4") {
     const parsed = new URL(url);
     const pathName = parsed.pathname.split("/").filter(Boolean).pop() || `video-${index + 1}.${extensionFallback}`;
     const cleaned = pathName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 200);
-    return `jdCatVid/${String(index + 1).padStart(3, "0")}-${cleaned}`;
+    return `jdVidCat/${String(index + 1).padStart(3, "0")}-${cleaned}`;
   } catch {
-    return `jdCatVid/${String(index + 1).padStart(3, "0")}-video.${extensionFallback}`;
+    return `jdVidCat/${String(index + 1).padStart(3, "0")}-video.${extensionFallback}`;
   }
 }
 
@@ -133,7 +133,7 @@ async function collectBlobUrlsFromTab(tabId) {
     const [injection] = await chrome.scripting.executeScript({
       target: { tabId },
       func: () => {
-        const value = window.__jdCatVidBlobUrls;
+        const value = window.__jdVidCatBlobUrls;
         return Array.isArray(value) ? value : [];
       }
     });
@@ -253,7 +253,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
       // Log fetch failures so they surface in the console without breaking the crawl.
       // toAbsolute() already rejects javascript:, data:, file:, etc., so such URLs
       // never reach fetch(); this warning covers genuine network or parse errors.
-      console.warn("jdCatVid: failed to fetch page during crawl:", current, err);
+      console.warn("jdVidCat: failed to fetch page during crawl:", current, err);
     }
   }
 
@@ -274,7 +274,7 @@ async function startDownloadFromTab({ startUrl, tabId, maxDownloads = DEFAULT_MA
         continue;
       }
 
-      const filename = `jdCatVid/${String(downloaded + 1).padStart(3, "0")}-blob.mp4`;
+      const filename = `jdVidCat/${String(downloaded + 1).padStart(3, "0")}-blob.mp4`;
       await chrome.downloads.download({
         url: blobResult.dataUrl,
         filename,
@@ -325,7 +325,7 @@ async function addDownloadToHistory(url, filename) {
   }
   await chrome.storage.local.set({ downloadHistory: history });
   // Notify popup if open (popup might not be open, which is expected)
-  chrome.runtime.sendMessage({ type: "jdcatvid:history-updated", history }).catch(() => {
+  chrome.runtime.sendMessage({ type: "jdVidCat:history-updated", history }).catch(() => {
     // Silently ignore errors - this is expected when popup is not open
   });
   return entry;
@@ -341,8 +341,8 @@ async function ensureContextMenuExists() {
     await chrome.contextMenus.removeAll();
     // Create fresh context menu item
     chrome.contextMenus.create({
-      id: "jdcatvid-download",
-      title: "jdCatVid: Download videos from this page",
+      id: "jdVidCat-download",
+      title: "jdVidCat: Download videos from this page",
       contexts: ["page"]
     });
   } catch (error) {
@@ -362,7 +362,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === "jdcatvid:get-history") {
+  if (message?.type === "jdVidCat:get-history") {
     (async () => {
       const history = await getDownloadHistory();
       sendResponse({ ok: true, history });
@@ -370,7 +370,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type === "jdcatvid:clear-history") {
+  if (message?.type === "jdVidCat:clear-history") {
     (async () => {
       await clearDownloadHistory();
       sendResponse({ ok: true });
@@ -378,7 +378,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type !== "jdcatvid:start") {
+  if (message?.type !== "jdVidCat:start") {
     return;
   }
 
@@ -439,7 +439,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
 
-  if (info.menuItemId === "jdcatvid-download") {
+  if (info.menuItemId === "jdVidCat-download") {
     // Use saved max downloads setting
     const { maxDownloads = DEFAULT_MAX_DOWNLOADS } = await chrome.storage.sync.get("maxDownloads");
     try {

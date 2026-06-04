@@ -63,7 +63,7 @@ function buildJDownloaderLink(url) {
 }
 
 function loadHistory() {
-  chrome.runtime.sendMessage({ type: "jdcatvid:get-history" }, (response) => {
+  chrome.runtime.sendMessage({ type: "jdVidCat:get-history" }, (response) => {
     if (chrome.runtime.lastError) {
       historyListNode.innerHTML = '<div class="empty-history">Error loading history</div>';
       return;
@@ -174,7 +174,7 @@ function loadHistory() {
 
 clearHistoryBtn.addEventListener("click", () => {
   if (confirm("Are you sure you want to clear download history?")) {
-    chrome.runtime.sendMessage({ type: "jdcatvid:clear-history" }, () => {
+    chrome.runtime.sendMessage({ type: "jdVidCat:clear-history" }, () => {
       loadHistory();
     });
   }
@@ -198,7 +198,7 @@ startButton.addEventListener("click", async () => {
 
   chrome.runtime.sendMessage(
     {
-      type: "jdcatvid:start",
+      type: "jdVidCat:start",
       payload: {
         tabId: activeTab.id,
         startUrl: activeTab.url,
@@ -225,7 +225,7 @@ startButton.addEventListener("click", async () => {
 
 // Listen for history updates from background script
 chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type === "jdcatvid:history-updated") {
+  if (message?.type === "jdVidCat:history-updated") {
     // Refresh history if history tab is visible
     const historyTab = document.getElementById("history");
     if (historyTab.classList.contains("active")) {

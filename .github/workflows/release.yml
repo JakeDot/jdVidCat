@@ -134,15 +134,22 @@ jobs:
       - name: Build extension artifacts
         run: |
           mkdir -p dist
-          # Define files to include in all packages
-          FILES=(manifest.json background.js content.js popup.html popup.js icons)
+          # Create Chrome extension (Chrome MV3-compliant: service_worker only)
+          zip -r dist/jdVidCat-chrome.zip manifest.json background.js content.js popup.html popup.js icons
 
-          # Create base ZIP (generic)
-          zip -r dist/jdVidCat.zip "${FILES[@]}"
-          # Create XPI for Firefox
-          zip -r dist/jdVidCat.xpi "${FILES[@]}"
-          # Create Chrome extension (same content)
-          cp dist/jdVidCat.zip dist/jdVidCat-chrome.zip
+          # Generate Firefox-specific manifest: replace service_worker with scripts fallback
+          jq '.background |= (del(.service_worker) | .scripts = ["background.js"])' manifest.json > dist/manifest-firefox.json \
+            || { echo "::error::Firefox manifest generation failed"; exit 1; }
+          jq . dist/manifest-firefox.json > /dev/null \
+            || { echo "::error::Firefox manifest is not valid JSON"; exit 1; }
+
+          # Create XPI for Firefox using the Firefox-specific manifest in a staging directory
+          mkdir -p dist/firefox-stage
+          cp background.js content.js popup.html popup.js dist/firefox-stage/
+          cp -r icons dist/firefox-stage/
+          cp dist/manifest-firefox.json dist/firefox-stage/manifest.json
+          (cd dist/firefox-stage && zip -r ../jdVidCat.xpi .)
+          rm -rf dist/firefox-stage
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
