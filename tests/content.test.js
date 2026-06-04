@@ -18,29 +18,29 @@ beforeAll(() => {
   require("../content.js");
 });
 
-// ── __jdCatVidBlobUrls property descriptor ────────────────────────────────────
-describe("__jdCatVidBlobUrls property", () => {
+// ── __jdVidCatBlobUrls property descriptor ────────────────────────────────────
+describe("__jdVidCatBlobUrls property", () => {
   test("is defined on window after content.js loads", () => {
-    expect(window.__jdCatVidBlobUrls).toBeDefined();
+    expect(window.__jdVidCatBlobUrls).toBeDefined();
   });
 
   test("is an array", () => {
-    expect(Array.isArray(window.__jdCatVidBlobUrls)).toBe(true);
+    expect(Array.isArray(window.__jdVidCatBlobUrls)).toBe(true);
   });
 
   test("is non-configurable", () => {
-    const descriptor = Object.getOwnPropertyDescriptor(window, "__jdCatVidBlobUrls");
+    const descriptor = Object.getOwnPropertyDescriptor(window, "__jdVidCatBlobUrls");
     expect(descriptor.configurable).toBe(false);
   });
 
   test("is non-enumerable", () => {
-    const descriptor = Object.getOwnPropertyDescriptor(window, "__jdCatVidBlobUrls");
+    const descriptor = Object.getOwnPropertyDescriptor(window, "__jdVidCatBlobUrls");
     expect(descriptor.enumerable).toBe(false);
   });
 
   test("throws when an attempt is made to redefine it", () => {
     expect(() => {
-      Object.defineProperty(window, "__jdCatVidBlobUrls", {
+      Object.defineProperty(window, "__jdVidCatBlobUrls", {
         value: ["overwritten"],
         configurable: true
       });
@@ -61,35 +61,35 @@ describe("URL.createObjectURL proxy", () => {
     expect(result).toMatch(/^blob:/);
   });
 
-  test("blob: URLs returned by createObjectURL are captured in __jdCatVidBlobUrls", () => {
+  test("blob: URLs returned by createObjectURL are captured in __jdVidCatBlobUrls", () => {
     const url = URL.createObjectURL(new Blob(["capture-test"]));
-    expect(window.__jdCatVidBlobUrls).toContain(url);
+    expect(window.__jdVidCatBlobUrls).toContain(url);
   });
 
   test("non-blob: return values are not stored", () => {
     // Force the underlying mock to return a non-blob URL for one call
     mockCreateObjectURL.mockReturnValueOnce("https://not-a-blob.com/resource");
-    const lengthBefore = window.__jdCatVidBlobUrls.length;
+    const lengthBefore = window.__jdVidCatBlobUrls.length;
     URL.createObjectURL(new Blob(["non-blob-result"]));
-    expect(window.__jdCatVidBlobUrls.length).toBe(lengthBefore);
+    expect(window.__jdVidCatBlobUrls.length).toBe(lengthBefore);
   });
 
   test("duplicate blob: URLs are stored only once (Set deduplication)", () => {
     const fixedUrl = "blob:https://example.com/deduplicated-url";
     mockCreateObjectURL.mockReturnValueOnce(fixedUrl);
     URL.createObjectURL(new Blob(["dup-a"]));
-    const lengthAfterFirst = window.__jdCatVidBlobUrls.length;
+    const lengthAfterFirst = window.__jdVidCatBlobUrls.length;
 
     mockCreateObjectURL.mockReturnValueOnce(fixedUrl);
     URL.createObjectURL(new Blob(["dup-b"]));
     // Length must not increase because the URL is already in the Set
-    expect(window.__jdCatVidBlobUrls.length).toBe(lengthAfterFirst);
+    expect(window.__jdVidCatBlobUrls.length).toBe(lengthAfterFirst);
   });
 
-  test("__jdCatVidBlobUrls getter returns a fresh array snapshot each time", () => {
-    const snap1 = window.__jdCatVidBlobUrls;
+  test("__jdVidCatBlobUrls getter returns a fresh array snapshot each time", () => {
+    const snap1 = window.__jdVidCatBlobUrls;
     URL.createObjectURL(new Blob(["snapshot-test"]));
-    const snap2 = window.__jdCatVidBlobUrls;
+    const snap2 = window.__jdVidCatBlobUrls;
     // The references are different objects (new array each time)
     expect(snap2).not.toBe(snap1);
     expect(snap2.length).toBe(snap1.length + 1);
@@ -113,7 +113,7 @@ describe("DOM scanning for video/source elements", () => {
     video.setAttribute("src", blobUrl);
     document.body.appendChild(video);
     await flushMicrotasks();
-    expect(window.__jdCatVidBlobUrls).toContain(blobUrl);
+    expect(window.__jdVidCatBlobUrls).toContain(blobUrl);
   });
 
   test("source element with blob src is captured via MutationObserver", async () => {
@@ -122,17 +122,17 @@ describe("DOM scanning for video/source elements", () => {
     source.setAttribute("src", blobUrl);
     document.body.appendChild(source);
     await flushMicrotasks();
-    expect(window.__jdCatVidBlobUrls).toContain(blobUrl);
+    expect(window.__jdVidCatBlobUrls).toContain(blobUrl);
   });
 
   test("non-blob src on a video element is not stored", async () => {
-    const lengthBefore = window.__jdCatVidBlobUrls.length;
+    const lengthBefore = window.__jdVidCatBlobUrls.length;
     const video = document.createElement("video");
     video.setAttribute("src", "https://example.com/video.mp4");
     document.body.appendChild(video);
     await flushMicrotasks();
     // May or may not have grown, but should not contain the https URL
-    expect(window.__jdCatVidBlobUrls).not.toContain("https://example.com/video.mp4");
+    expect(window.__jdVidCatBlobUrls).not.toContain("https://example.com/video.mp4");
   });
 
   test("video element src attribute change is detected", async () => {
@@ -143,6 +143,6 @@ describe("DOM scanning for video/source elements", () => {
 
     video.setAttribute("src", blobUrl);
     await flushMicrotasks();
-    expect(window.__jdCatVidBlobUrls).toContain(blobUrl);
+    expect(window.__jdVidCatBlobUrls).toContain(blobUrl);
   });
 });

@@ -190,7 +190,7 @@ describe("history tab: loadHistory rendering", () => {
   function triggerLoadHistory(historyEntries) {
     // Simulate clicking the history tab, which calls loadHistory()
     chrome.runtime.sendMessage.mockImplementation((msg, cb) => {
-      if (msg.type === "jdcatvid:get-history" && typeof cb === "function") {
+      if (msg.type === "jdVidCat:get-history" && typeof cb === "function") {
         cb({ ok: true, history: historyEntries });
       }
     });
@@ -208,13 +208,13 @@ describe("history tab: loadHistory rendering", () => {
       {
         id: "1",
         url: "https://example.com/a.mp4",
-        filename: "jdCatVid/001-a.mp4",
+        filename: "jdVidCat/001-a.mp4",
         timestamp: new Date().toISOString()
       },
       {
         id: "2",
         url: "https://example.com/b.mp4",
-        filename: "jdCatVid/002-b.mp4",
+        filename: "jdVidCat/002-b.mp4",
         timestamp: new Date().toISOString()
       }
     ];
@@ -227,11 +227,11 @@ describe("history tab: loadHistory rendering", () => {
       {
         id: "1",
         url: "https://example.com/clip.mp4",
-        filename: "jdCatVid/001-clip.mp4",
+        filename: "jdVidCat/001-clip.mp4",
         timestamp: new Date().toISOString()
       }
     ]);
-    expect(document.querySelector(".history-item-title").textContent).toBe("jdCatVid/001-clip.mp4");
+    expect(document.querySelector(".history-item-title").textContent).toBe("jdVidCat/001-clip.mp4");
   });
 
   test("renders items in reverse chronological order", () => {
@@ -260,7 +260,7 @@ describe("history tab: loadHistory rendering", () => {
       {
         id: "1",
         url: "blob:https://example.com/abc",
-        filename: "jdCatVid/001-blob.mp4",
+        filename: "jdVidCat/001-blob.mp4",
         timestamp: new Date().toISOString()
       }
     ]);
