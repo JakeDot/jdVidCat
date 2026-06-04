@@ -44,12 +44,18 @@ jobs:
           # Define files to include in all packages
           FILES=(manifest.json background.js content.js popup.html popup.js icons)
 
-          # Create base ZIP (generic)
+          # Create base ZIP (generic, Chrome MV3-compliant)
           zip -r dist/jdVidCat.zip "${FILES[@]}"
-          # Create XPI for Firefox
-          zip -r dist/jdVidCat.xpi "${FILES[@]}"
-          # Create Chrome extension (same content)
+          # Create Chrome extension (same content as base ZIP)
           cp dist/jdVidCat.zip dist/jdVidCat-chrome.zip
+
+          # Generate Firefox-specific manifest with background.scripts fallback (MV2 compat)
+          jq '.background.scripts = ["background.js"]' manifest.json > dist/manifest-firefox.json
+          # Create XPI for Firefox using the Firefox-specific manifest
+          cp dist/manifest-firefox.json manifest.json
+          zip -r dist/jdVidCat.xpi "${FILES[@]}"
+          # Restore original manifest
+          git checkout -- manifest.json
 
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
